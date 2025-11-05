@@ -16,3 +16,7 @@ final studentsStreamProvider = StreamProvider((ref) {
 final reviewersStreamProvider = StreamProvider((ref) {
   return ref.watch(userRepositoryProvider).watchUsersByRole(UserRole.reviewer);
 });
+
+final adminsStreamProvider = StreamProvider((ref) {
+  return ref.watch(userRepositoryProvider).watchUsersByRole(UserRole.admin);
+});

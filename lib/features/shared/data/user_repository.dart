@@ -43,6 +43,23 @@ class UserRepository {
     await _collection.doc(uid).update({'blocked': blocked});
   }
 
+  Future<List<AppUser>> fetchAdmins({bool onlyPending = false}) async {
+    Query<Map<String, dynamic>> query =
+        _collection.where('role', isEqualTo: UserRole.admin.name);
+    if (onlyPending) {
+      query = query.where('approvedAdmin', isEqualTo: false);
+    }
+    final snapshot = await query.get();
+    return snapshot.docs.map(AppUser.fromDocument).toList();
+  }
+
+  Future<void> setAdminApproval({
+    required String uid,
+    required bool approved,
+  }) async {
+    await _collection.doc(uid).update({'approvedAdmin': approved});
+  }
+
   Future<List<AppUser>> fetchReviewersForDepartment(String department) async {
     final snapshot = await _collection
         .where('role', isEqualTo: UserRole.reviewer.name)

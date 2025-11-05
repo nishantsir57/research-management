@@ -11,6 +11,7 @@ class AppUser {
     required this.department,
     required this.subjects,
     required this.approvedReviewer,
+    required this.approvedAdmin,
     required this.blocked,
     required this.createdAt,
     required this.fcmTokens,
@@ -23,11 +24,13 @@ class AppUser {
   final String? department;
   final List<String> subjects;
   final bool approvedReviewer;
+  final bool approvedAdmin;
   final bool blocked;
   final DateTime createdAt;
   final List<String> fcmTokens;
 
   bool get isReviewerPending => role.isReviewer && !approvedReviewer;
+  bool get isAdminPending => role.isAdmin && !approvedAdmin;
 
   AppUser copyWith({
     String? fullName,
@@ -36,6 +39,7 @@ class AppUser {
     String? department,
     List<String>? subjects,
     bool? approvedReviewer,
+    bool? approvedAdmin,
     bool? blocked,
     DateTime? createdAt,
     List<String>? fcmTokens,
@@ -48,6 +52,7 @@ class AppUser {
       department: department ?? this.department,
       subjects: subjects ?? this.subjects,
       approvedReviewer: approvedReviewer ?? this.approvedReviewer,
+      approvedAdmin: approvedAdmin ?? this.approvedAdmin,
       blocked: blocked ?? this.blocked,
       createdAt: createdAt ?? this.createdAt,
       fcmTokens: fcmTokens ?? this.fcmTokens,
@@ -67,6 +72,7 @@ class AppUser {
               .toList() ??
           const [],
       approvedReviewer: data['approvedReviewer'] as bool? ?? false,
+      approvedAdmin: data['approvedAdmin'] as bool? ?? false,
       blocked: data['blocked'] as bool? ?? false,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       fcmTokens: (data['fcmTokens'] as List<dynamic>?)
@@ -84,6 +90,7 @@ class AppUser {
       'department': department,
       'subjects': subjects,
       'approvedReviewer': approvedReviewer,
+      'approvedAdmin': approvedAdmin,
       'blocked': blocked,
       'createdAt': Timestamp.fromDate(createdAt),
       'fcmTokens': fcmTokens,

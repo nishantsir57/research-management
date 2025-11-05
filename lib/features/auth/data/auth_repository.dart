@@ -67,6 +67,7 @@ class AuthRepository {
       'department': department,
       'subjects': subjects,
       'approvedReviewer': role == UserRole.reviewer ? false : true,
+      'approvedAdmin': role == UserRole.admin ? false : true,
       'blocked': false,
       'createdAt': FieldValue.serverTimestamp(),
       'fcmTokens': <String>[],

@@ -5,6 +5,7 @@ import '../../../../core/models/app_settings.dart';
 import '../../../../core/models/app_user.dart';
 import '../../../../core/models/department.dart';
 import '../../../../core/models/research_paper.dart';
+import '../../../auth/domain/auth_providers.dart';
 import '../../../admin/domain/settings_providers.dart';
 import '../../../papers/domain/paper_providers.dart';
 import '../../../shared/domain/department_providers.dart';
@@ -24,7 +25,7 @@ class _AdminDashboardViewState extends ConsumerState<AdminDashboardView>
   @override
   void initState() {
     super.initState();
-    _controller = TabController(length: 4, vsync: this);
+    _controller = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -46,6 +47,7 @@ class _AdminDashboardViewState extends ConsumerState<AdminDashboardView>
             Tab(text: 'Settings'),
             Tab(text: 'Departments'),
             Tab(text: 'Reviewers'),
+            Tab(text: 'Admins'),
             Tab(text: 'Papers'),
           ],
         ),
@@ -59,6 +61,7 @@ class _AdminDashboardViewState extends ConsumerState<AdminDashboardView>
             _SettingsTab(settings: settings),
             const _DepartmentsTab(),
             const _ReviewersTab(),
+            const _AdminsTab(),
             const _PapersTab(),
           ],
         ),
@@ -260,6 +263,123 @@ class _ReviewersTab extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _AdminsTab extends ConsumerWidget {
+  const _AdminsTab();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final adminsAsync = ref.watch(adminsStreamProvider);
+    final currentUser = ref.watch(authUserChangesProvider).valueOrNull;
+
+    return adminsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => Center(child: Text('Error: $error')),
+      data: (admins) {
+        final pending = admins.where((admin) => !admin.approvedAdmin).toList();
+        final active = admins.where((admin) => admin.approvedAdmin).toList();
+
+        return Padding(
+          padding: const EdgeInsets.all(24),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _AdminList(
+                  title: 'Pending admins',
+                  admins: pending,
+                  pending: true,
+                  currentUserId: currentUser?.uid,
+                ),
+              ),
+              const SizedBox(width: 24),
+              Expanded(
+                child: _AdminList(
+                  title: 'Active admins',
+                  admins: active,
+                  pending: false,
+                  currentUserId: currentUser?.uid,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AdminList extends ConsumerWidget {
+  const _AdminList({
+    required this.title,
+    required this.admins,
+    required this.pending,
+    required this.currentUserId,
+  });
+
+  final String title;
+  final List<AppUser> admins;
+  final bool pending;
+  final String? currentUserId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userRepo = ref.read(userRepositoryProvider);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 12),
+            Expanded(
+              child: admins.isEmpty
+                  ? const Center(child: Text('No admins in this list.'))
+                  : ListView.separated(
+                      itemCount: admins.length,
+                      separatorBuilder: (_, __) => const Divider(),
+                      itemBuilder: (context, index) {
+                        final admin = admins[index];
+                        final isSelf = admin.uid == currentUserId;
+                        return ListTile(
+                          leading: const Icon(Icons.shield_outlined),
+                          title: Text(admin.fullName),
+                          subtitle: Text(admin.email),
+                          trailing: pending
+                              ? IconButton(
+                                  icon: const Icon(Icons.check_circle_outline),
+                                  onPressed: () => userRepo.setAdminApproval(
+                                    uid: admin.uid,
+                                    approved: true,
+                                  ),
+                                )
+                              : Switch(
+                                  value: admin.approvedAdmin && !admin.blocked,
+                                  onChanged: isSelf
+                                      ? null
+                                      : (value) async {
+                                          await userRepo.setAdminApproval(
+                                            uid: admin.uid,
+                                            approved: value,
+                                          );
+                                          await userRepo.setUserBlocked(
+                                            uid: admin.uid,
+                                            blocked: !value,
+                                          );
+                                        },
+                                ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

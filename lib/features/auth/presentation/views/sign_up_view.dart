@@ -49,6 +49,10 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
       orElse: () => Department(id: '', name: '', subjects: const []),
     );
 
+    final departmentName = _role.isAdmin || department.id.isEmpty
+        ? null
+        : department.name;
+
     await ref
         .read(authControllerProvider.notifier)
         .signUp(
@@ -56,7 +60,7 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
           role: _role,
-          department: department.id.isEmpty ? null : department.name,
+          department: departmentName,
           subjects: _role.isReviewer ? _selectedSubjects.toList() : const [],
         );
   }
@@ -108,11 +112,19 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
                       value: UserRole.reviewer,
                       label: Text('Reviewer'),
                     ),
+                    ButtonSegment(
+                      value: UserRole.admin,
+                      label: Text('Admin'),
+                    ),
                   ],
                   selected: <UserRole>{_role},
                   onSelectionChanged: (roles) {
                     setState(() {
                       _role = roles.first;
+                      if (_role.isAdmin) {
+                        _selectedDepartmentId = null;
+                        _selectedSubjects.clear();
+                      }
                     });
                   },
                 ),
@@ -120,6 +132,11 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
                 if (_role.isReviewer)
                   const Text(
                     'Reviewer accounts require admin approval before accessing submissions.',
+                  ),
+                if (_role.isAdmin)
+                  const Text(
+                    'Admin requests require verification from an active administrator. '
+                    'First admin must be approved manually via Firebase.',
                   ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -218,34 +235,36 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  value: _selectedDepartmentId,
-                  items: departments
-                      .map(
-                        (dept) => DropdownMenuItem(
-                          value: dept.id,
-                          child: Text(dept.name),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) => setState(() {
-                    _selectedDepartmentId = value;
-                    _selectedSubjects.clear();
-                  }),
-                  decoration: const InputDecoration(
-                    labelText: 'Department',
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (value) {
-                    if (_role.isReviewer || _role.isStudent) {
-                      if (value == null || value.isEmpty) {
-                        return 'Department is required';
+                if (!_role.isAdmin) ...[
+                  DropdownButtonFormField<String>(
+                    value: _selectedDepartmentId,
+                    items: departments
+                        .map(
+                          (dept) => DropdownMenuItem(
+                            value: dept.id,
+                            child: Text(dept.name),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) => setState(() {
+                      _selectedDepartmentId = value;
+                      _selectedSubjects.clear();
+                    }),
+                    decoration: const InputDecoration(
+                      labelText: 'Department',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) {
+                      if (_role.isReviewer || _role.isStudent) {
+                        if (value == null || value.isEmpty) {
+                          return 'Department is required';
+                        }
                       }
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 if (_role.isReviewer)
                   _ReviewerSubjectsSelector(
                     subjects: departments

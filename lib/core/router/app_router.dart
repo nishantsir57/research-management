@@ -11,6 +11,7 @@ import '../../features/auth/presentation/views/account_blocked_view.dart';
 import '../../features/auth/presentation/views/sign_in_view.dart';
 import '../../features/auth/presentation/views/sign_up_view.dart';
 import '../../features/auth/presentation/views/splash_view.dart';
+import '../../features/admin/presentation/views/admin_pending_view.dart';
 import '../../features/dashboard/presentation/views/reviewer_dashboard_view.dart';
 import '../../features/dashboard/presentation/views/student_dashboard_view.dart';
 import '../../features/reviewer/presentation/views/reviewer_pending_view.dart';
@@ -58,6 +59,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: '/admin',
         builder: (context, state) => const AdminDashboardView(),
       ),
+      GoRoute(
+        path: '/admin/pending',
+        builder: (context, state) => const AdminPendingView(),
+      ),
     ],
     redirect: (context, state) {
       final isAuthRoute = state.matchedLocation.startsWith('/auth');
@@ -85,6 +90,13 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       if (user.role.isReviewer && !user.approvedReviewer) {
         if (!state.matchedLocation.startsWith('/reviewer/pending')) {
           return '/reviewer/pending';
+        }
+        return null;
+      }
+
+      if (user.role.isAdmin && !user.approvedAdmin) {
+        if (!state.matchedLocation.startsWith('/admin/pending')) {
+          return '/admin/pending';
         }
         return null;
       }

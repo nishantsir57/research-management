@@ -140,6 +140,33 @@ class _SignInViewState extends ConsumerState<SignInView> {
                       onPressed: () => context.go('/auth/sign-up'),
                       child: const Text('Create a new account'),
                     ),
+                    const SizedBox(height: 24),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest
+                            .withAlpha((0.4 * 255).round()),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text(
+                            'Admin Access',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            '1. Create the very first admin account via Firebase Authentication and set role=admin '
+                            'and approvedAdmin=true in Firestore manually.\n'
+                            '2. Subsequent admins can sign up from the main form by choosing the Admin role.\n'
+                            '3. Existing admins review and approve new admin requests from the Admin Console → Admins tab before they gain access.',
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
