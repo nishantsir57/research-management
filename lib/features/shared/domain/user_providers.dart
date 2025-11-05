@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/models/app_user.dart';
 import '../../../core/models/user_role.dart';
 import '../../../core/providers/firebase_providers.dart';
 import '../data/user_repository.dart';
@@ -19,4 +20,8 @@ final reviewersStreamProvider = StreamProvider((ref) {
 
 final adminsStreamProvider = StreamProvider((ref) {
   return ref.watch(userRepositoryProvider).watchUsersByRole(UserRole.admin);
+});
+
+final userDetailsProvider = StreamProvider.family<AppUser?, String>((ref, uid) {
+  return ref.watch(userRepositoryProvider).watchUser(uid);
 });

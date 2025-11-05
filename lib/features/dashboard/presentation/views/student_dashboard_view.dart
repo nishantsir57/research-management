@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/models/app_user.dart';
 import '../../../auth/domain/auth_providers.dart';
+import '../../../papers/presentation/views/student/student_discover_view.dart';
+import '../../../papers/presentation/views/student/student_home_view.dart';
 import '../../../papers/presentation/views/student/student_paper_submission_view.dart';
 import '../../../papers/presentation/views/student/student_papers_overview_view.dart';
 import '../../../social/presentation/views/discussions_view.dart';
 import '../../../social/presentation/views/network_view.dart';
-import '../../../papers/presentation/views/student/student_discover_view.dart';
+import '../../../shared/widgets/gradient_app_bar.dart';
 
 class StudentDashboardView extends ConsumerStatefulWidget {
   const StudentDashboardView({super.key});
@@ -31,86 +33,60 @@ class _StudentDashboardViewState extends ConsumerState<StudentDashboardView> {
           return const Scaffold(body: Center(child: Text('User not found.')));
         }
 
+        final navItems = _navItems();
         final pages = _buildPages(user);
-        final titles = [
-          'My Papers',
-          'Submit Paper',
-          'Discover',
-          'Connections',
-          'Discussions',
-        ];
 
         return LayoutBuilder(
           builder: (context, constraints) {
-            final isWide = constraints.maxWidth >= 900;
+            final isWide = constraints.maxWidth >= 1024;
 
-            final body = Scaffold(
-              appBar: AppBar(
-                title: Text('Student · ${titles[_index]}'),
-                actions: [
-                  IconButton(
-                    icon: const Icon(Icons.logout),
-                    onPressed: () => ref.read(authRepositoryProvider).signOut(),
-                  ),
-                ],
+            return Scaffold(
+              backgroundColor: Theme.of(context).colorScheme.surface,
+              appBar: GradientAppBar(
+                userName: user.fullName,
+                onLogout: () => ref.read(authRepositoryProvider).signOut(),
+                onNotifications: () {},
               ),
               body: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                child: pages[_index],
+                duration: const Duration(milliseconds: 350),
+                child: isWide
+                    ? Row(
+                        children: [
+                          _DesktopNav(
+                            items: navItems,
+                            selectedIndex: _index,
+                            onChanged: (value) => setState(() => _index = value),
+                          ),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 16, bottom: 24),
+                              child: pages[_index],
+                            ),
+                          ),
+                        ],
+                      )
+                    : Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                        child: pages[_index],
+                      ),
               ),
               bottomNavigationBar: isWide
                   ? null
                   : NavigationBar(
                       selectedIndex: _index,
-                      destinations: const [
-                        NavigationDestination(icon: Icon(Icons.library_books_outlined), label: 'My Papers'),
-                        NavigationDestination(icon: Icon(Icons.note_add_outlined), label: 'Submit'),
-                        NavigationDestination(icon: Icon(Icons.travel_explore_outlined), label: 'Discover'),
-                        NavigationDestination(icon: Icon(Icons.people_outline), label: 'Connections'),
-                        NavigationDestination(icon: Icon(Icons.forum_outlined), label: 'Discuss'),
-                      ],
+                      backgroundColor: Colors.white,
+                      indicatorColor: Theme.of(context).colorScheme.primary.withOpacity(0.12),
+                      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+                      destinations: navItems
+                          .map(
+                            (item) => NavigationDestination(
+                              icon: Icon(item.icon),
+                              label: item.label,
+                            ),
+                          )
+                          .toList(),
                       onDestinationSelected: (value) => setState(() => _index = value),
                     ),
-            );
-
-            if (!isWide) {
-              return body;
-            }
-
-            return Scaffold(
-              body: Row(
-                children: [
-                  NavigationRail(
-                    selectedIndex: _index,
-                    onDestinationSelected: (value) => setState(() => _index = value),
-                    labelType: NavigationRailLabelType.all,
-                    destinations: const [
-                      NavigationRailDestination(
-                        icon: Icon(Icons.library_books_outlined),
-                        label: Text('My Papers'),
-                      ),
-                      NavigationRailDestination(
-                        icon: Icon(Icons.note_add_outlined),
-                        label: Text('Submit'),
-                      ),
-                      NavigationRailDestination(
-                        icon: Icon(Icons.travel_explore_outlined),
-                        label: Text('Discover'),
-                      ),
-                      NavigationRailDestination(
-                        icon: Icon(Icons.people_outline),
-                        label: Text('Connections'),
-                      ),
-                      NavigationRailDestination(
-                        icon: Icon(Icons.forum_outlined),
-                        label: Text('Discussions'),
-                      ),
-                    ],
-                  ),
-                  const VerticalDivider(width: 1),
-                  Expanded(child: body),
-                ],
-              ),
             );
           },
         );
@@ -120,11 +96,110 @@ class _StudentDashboardViewState extends ConsumerState<StudentDashboardView> {
 
   List<Widget> _buildPages(AppUser user) {
     return [
+      StudentHomeView(user: user, onSubmitPaper: () => setState(() => _index = 2)),
       StudentPapersOverviewView(user: user),
       StudentPaperSubmissionView(user: user),
       StudentDiscoverView(user: user),
       NetworkView(user: user),
       DiscussionsView(user: user),
     ];
+  }
+
+  List<_NavItem> _navItems() {
+    return const [
+      _NavItem(label: 'Home', icon: Icons.dashboard_customize_rounded),
+      _NavItem(label: 'My Papers', icon: Icons.library_books_outlined),
+      _NavItem(label: 'Submit', icon: Icons.note_add_outlined),
+      _NavItem(label: 'Discover', icon: Icons.travel_explore_outlined),
+      _NavItem(label: 'Network', icon: Icons.people_alt_outlined),
+      _NavItem(label: 'Discuss', icon: Icons.forum_outlined),
+    ];
+  }
+}
+
+class _NavItem {
+  const _NavItem({required this.label, required this.icon});
+
+  final String label;
+  final IconData icon;
+}
+
+class _DesktopNav extends StatelessWidget {
+  const _DesktopNav({required this.items, required this.selectedIndex, required this.onChanged});
+
+  final List<_NavItem> items;
+  final int selectedIndex;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 20, 24),
+      child: Container(
+        width: 240,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 24, offset: const Offset(0, 18)),
+          ],
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 16),
+            for (var i = 0; i < items.length; i++)
+              _NavButton(
+                item: items[i],
+                isSelected: i == selectedIndex,
+                onTap: () => onChanged(i),
+                theme: theme,
+              ),
+            const Spacer(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NavButton extends StatelessWidget {
+  const _NavButton({required this.item, required this.isSelected, required this.onTap, required this.theme});
+
+  final _NavItem item;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    final background = isSelected ? theme.colorScheme.primary.withOpacity(0.12) : Colors.transparent;
+    final foreground = isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            children: [
+              Icon(item.icon, color: foreground),
+              const SizedBox(width: 12),
+              Text(
+                item.label,
+                style: theme.textTheme.labelLarge?.copyWith(color: foreground, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

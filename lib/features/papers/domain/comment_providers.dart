@@ -11,3 +11,7 @@ final paperCommentRepositoryProvider = Provider<PaperCommentRepository>((ref) {
 final paperCommentsProvider = StreamProvider.family((ref, String paperId) {
   return ref.watch(paperCommentRepositoryProvider).watchComments(paperId);
 });
+
+final paperCommentCountProvider = StreamProvider.family<int, String>((ref, paperId) {
+  return ref.watch(paperCommentRepositoryProvider).watchComments(paperId).map((comments) => comments.length);
+});

@@ -21,3 +21,7 @@ final reviewerAssignedPapersProvider =
     StreamProvider.family<List<ResearchPaper>, String>((ref, reviewerId) {
   return ref.watch(researchPaperRepositoryProvider).watchAssignedToReviewer(reviewerId);
 });
+
+final paperDetailsProvider = StreamProvider.family<ResearchPaper?, String>((ref, paperId) {
+  return ref.watch(researchPaperRepositoryProvider).watchPaper(paperId);
+});

@@ -74,4 +74,10 @@ class UserRepository {
     if (!doc.exists) return null;
     return AppUser.fromDocument(doc);
   }
+
+  Stream<AppUser?> watchUser(String uid) {
+    return _collection.doc(uid).snapshots().map(
+          (snapshot) => snapshot.exists ? AppUser.fromDocument(snapshot) : null,
+        );
+  }
 }

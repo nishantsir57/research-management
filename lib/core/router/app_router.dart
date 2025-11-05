@@ -14,7 +14,11 @@ import '../../features/auth/presentation/views/splash_view.dart';
 import '../../features/admin/presentation/views/admin_pending_view.dart';
 import '../../features/dashboard/presentation/views/reviewer_dashboard_view.dart';
 import '../../features/dashboard/presentation/views/student_dashboard_view.dart';
+import '../../features/papers/presentation/views/paper_list_page.dart';
+import '../../features/papers/presentation/views/paper_view_page.dart';
 import '../../features/reviewer/presentation/views/reviewer_pending_view.dart';
+
+final pendingRedirectProvider = StateProvider<String?>((ref) => null);
 
 final goRouterProvider = Provider<GoRouter>((ref) {
   final authRepository = ref.watch(authRepositoryProvider);
@@ -63,6 +67,30 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: '/admin/pending',
         builder: (context, state) => const AdminPendingView(),
       ),
+      GoRoute(
+        path: '/papers',
+        builder: (context, state) => const PaperListPage(),
+      ),
+      GoRoute(
+        path: '/paper/:paperId',
+        pageBuilder: (context, state) {
+          final paperId = state.pathParameters['paperId']!;
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: PaperViewPage(paperId: paperId),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              final curved = CurvedAnimation(parent: animation, curve: Curves.easeInOut);
+              return FadeTransition(
+                opacity: curved,
+                child: SlideTransition(
+                  position: Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero).animate(curved),
+                  child: child,
+                ),
+              );
+            },
+          );
+        },
+      ),
     ],
     redirect: (context, state) {
       final isAuthRoute = state.matchedLocation.startsWith('/auth');
@@ -80,10 +108,15 @@ final goRouterProvider = Provider<GoRouter>((ref) {
 
       if (user == null) {
         if (isAuthRoute) return null;
+        if (state.matchedLocation != '/') {
+          final pendingLocation = state.uri.path + (state.uri.hasQuery ? '?${state.uri.query}' : '');
+          ref.read(pendingRedirectProvider.notifier).state = pendingLocation;
+        }
         return '/auth/sign-in';
       }
 
       if (user.blocked) {
+        ref.read(pendingRedirectProvider.notifier).state = null;
         return state.matchedLocation == '/auth/blocked' ? null : '/auth/blocked';
       }
 
@@ -101,16 +134,28 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         return null;
       }
 
+      final pendingRedirect = ref.read(pendingRedirectProvider);
+      if (pendingRedirect != null && pendingRedirect != state.matchedLocation) {
+        ref.read(pendingRedirectProvider.notifier).state = null;
+        return pendingRedirect;
+      }
+
+      final isPaperRoute = state.matchedLocation.startsWith('/paper');
+      final isPapersRoute = state.matchedLocation.startsWith('/papers');
+
       if (user.role.isAdmin) {
-        return state.matchedLocation.startsWith('/admin') ? null : '/admin';
+        final allow = state.matchedLocation.startsWith('/admin') || isPaperRoute || isPapersRoute;
+        return allow ? null : '/admin';
       }
 
       if (user.role.isReviewer) {
-        return state.matchedLocation.startsWith('/reviewer') ? null : '/reviewer';
+        final allow = state.matchedLocation.startsWith('/reviewer') || isPaperRoute || isPapersRoute;
+        return allow ? null : '/reviewer';
       }
 
       if (user.role.isStudent) {
-        return state.matchedLocation.startsWith('/student') ? null : '/student';
+        final allow = state.matchedLocation.startsWith('/student') || isPaperRoute || isPapersRoute;
+        return allow ? null : '/student';
       }
 
       return null;

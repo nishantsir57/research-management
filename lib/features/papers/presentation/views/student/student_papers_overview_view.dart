@@ -3,14 +3,19 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../../core/models/app_user.dart';
 import '../../../../../core/models/research_paper.dart';
 import '../../../domain/paper_providers.dart';
 import '../../controllers/paper_submission_controller.dart';
+import '../../widgets/paper_card.dart';
 
 class StudentPapersOverviewView extends ConsumerWidget {
   const StudentPapersOverviewView({super.key, required this.user});
@@ -23,7 +28,10 @@ class StudentPapersOverviewView extends ConsumerWidget {
 
     return papersAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => Center(child: Text('Error fetching papers: $error')),
+      error: (error, _) {
+        print('Error fetching papers for user ${user.uid}: $error');
+        return Center(child: Text('Error fetching papers: $error'));
+      },
       data: (papers) {
         if (papers.isEmpty) {
           return const Center(
@@ -31,130 +39,86 @@ class StudentPapersOverviewView extends ConsumerWidget {
           );
         }
 
-        return ListView.separated(
-          padding: const EdgeInsets.all(24),
-          itemCount: papers.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 16),
-          itemBuilder: (context, index) {
-            final paper = papers[index];
-            return _PaperCard(user: user, paper: paper);
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final crossAxisCount = _responsiveColumns(constraints.maxWidth);
+            return MasonryGridView.count(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              crossAxisCount: crossAxisCount,
+              mainAxisSpacing: 24,
+              crossAxisSpacing: 24,
+              itemCount: papers.length,
+              itemBuilder: (context, index) {
+                final paper = papers[index];
+                return StudentPaperTile(user: user, paper: paper);
+              },
+            );
           },
         );
       },
     );
   }
+
+  int _responsiveColumns(double width) {
+    if (width >= 1200) return 4;
+    if (width >= 900) return 3;
+    if (width >= 600) return 2;
+    return 1;
+  }
 }
 
-class _PaperCard extends ConsumerWidget {
-  const _PaperCard({required this.user, required this.paper});
+class StudentPaperTile extends ConsumerWidget {
+  const StudentPaperTile({required this.user, required this.paper});
 
   final AppUser user;
   final ResearchPaper paper;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final statusColor = _statusColor(context, paper.status);
     final formatter = DateFormat('MMM d, y • h:mm a');
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    paper.title,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-                Chip(
-                  backgroundColor: statusColor.withAlpha((0.1 * 255).round()),
-                  label: Text(
-                    paper.status.name.toUpperCase(),
-                    style: TextStyle(color: statusColor),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text('Department: ${paper.department} • Subject: ${paper.subject}'),
-            const SizedBox(height: 4),
-            Text('Visibility: ${paper.visibility.name}'),
-            const SizedBox(height: 8),
-            Text('Submitted ${formatter.format(paper.createdAt)}'),
-            const SizedBox(height: 12),
-            if (paper.aiFeedback != null) ...[
-              Text(
-                'AI Feedback',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 4),
-              Text(paper.aiFeedback!.summary),
-              if (paper.aiFeedback!.suggestions.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                const Text('Suggestions:'),
-                const SizedBox(height: 4),
-                ...paper.aiFeedback!.suggestions.map((suggestion) => Text('• $suggestion')),
-              ],
-              const SizedBox(height: 12),
-            ],
-            if (paper.reviewerComments != null && paper.reviewerComments!.isNotEmpty) ...[
-              Text(
-                'Reviewer Comments',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 4),
-              Text(paper.reviewerComments!),
-              const SizedBox(height: 12),
-            ],
-            Row(
-              children: [
-                if (paper.fileUrl != null)
-                  TextButton.icon(
-                    onPressed: () => _openFile(context, paper.fileUrl!),
-                    icon: const Icon(Icons.open_in_new),
-                    label: const Text('Open File'),
-                  ),
-                const Spacer(),
-                if (paper.status == PaperStatus.reverted)
-                  FilledButton.tonal(
-                    onPressed: () => _showResubmitSheet(context, ref, paper),
-                    child: const Text('Resubmit'),
-                  ),
-              ],
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        PaperCard(
+          paper: paper,
+          heroTag: 'paper-card-${paper.id}',
+          onTap: () => context.go('/paper/${paper.id}'),
+          onShare: () => _sharePaper(context, paper),
+          showAuthor: false,
+          highlightBadges: [
+            _badge(context, Icons.schedule_rounded, 'Submitted ${formatter.format(paper.createdAt)}'),
+            _badge(context, Icons.visibility_rounded, paper.visibility.name.toUpperCase()),
           ],
         ),
+        const SizedBox(height: 12),
+        _PaperInsights(
+          paper: paper,
+          onResubmit: () => _showResubmitSheet(context, ref, paper),
+          onOpenFile: paper.fileUrl != null ? () => _openFile(context, paper.fileUrl!) : null,
+        ),
+      ],
+    );
+  }
+
+  Widget _badge(BuildContext context, IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 6),
+          Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: Theme.of(context).colorScheme.primary)),
+        ],
       ),
     );
   }
 
-  Color _statusColor(BuildContext context, PaperStatus status) {
-    final scheme = Theme.of(context).colorScheme;
-    switch (status) {
-      case PaperStatus.submitted:
-        return scheme.primary;
-      case PaperStatus.aiReview:
-        return scheme.secondary;
-      case PaperStatus.underReview:
-        return scheme.tertiary;
-      case PaperStatus.reverted:
-        return scheme.error;
-      case PaperStatus.approved:
-        return scheme.primaryContainer;
-      case PaperStatus.published:
-        return scheme.primary;
-    }
-  }
-
-  Future<void> _showResubmitSheet(
-    BuildContext context,
-    WidgetRef ref,
-    ResearchPaper paper,
-  ) async {
+  Future<void> _showResubmitSheet(BuildContext context, WidgetRef ref, ResearchPaper paper) async {
     await showModalBottomSheet<void>(
       context: context,
       useSafeArea: true,
@@ -171,6 +135,156 @@ class _PaperCard extends ConsumerWidget {
         const SnackBar(content: Text('Unable to open the paper file.')),
       );
     }
+  }
+
+  Future<void> _sharePaper(BuildContext context, ResearchPaper paper) async {
+    final url = Uri.parse('https://researchhub.app/paper/${paper.id}');
+    final shareText = url.toString();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.ios_share_rounded),
+                title: const Text('Share via apps'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  Share.shareUri(url);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.copy_rounded),
+                title: const Text('Copy link'),
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: shareText));
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Paper link copied to clipboard.')),
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _PaperInsights extends StatelessWidget {
+  const _PaperInsights({
+    required this.paper,
+    this.onResubmit,
+    this.onOpenFile,
+  });
+
+  final ResearchPaper paper;
+  final VoidCallback? onResubmit;
+  final VoidCallback? onOpenFile;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 22,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (paper.aiFeedback != null) ...[
+            _InsightHeader(icon: Icons.auto_awesome_rounded, label: 'AI Feedback'),
+            const SizedBox(height: 6),
+            Text(
+              paper.aiFeedback!.summary,
+              style: theme.textTheme.bodyMedium,
+            ),
+            if (paper.aiFeedback!.suggestions.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              ...paper.aiFeedback!.suggestions.map((suggestion) => Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('• ', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Expanded(child: Text(suggestion)),
+                    ],
+                  )),
+            ],
+            const SizedBox(height: 20),
+          ],
+          if (paper.reviewerComments != null && paper.reviewerComments!.isNotEmpty) ...[
+            _InsightHeader(icon: Icons.rate_review_outlined, label: 'Reviewer Comments'),
+            const SizedBox(height: 6),
+            Text(paper.reviewerComments!, style: theme.textTheme.bodyMedium),
+            const SizedBox(height: 20),
+          ],
+          Row(
+            children: [
+              if (onOpenFile != null)
+                OutlinedButton.icon(
+                  onPressed: onOpenFile,
+                  icon: const Icon(Icons.picture_as_pdf_outlined),
+                  label: const Text('Open submission'),
+                ),
+              if (onOpenFile != null) const SizedBox(width: 12),
+              if (paper.status == PaperStatus.reverted && onResubmit != null)
+                FilledButton.tonalIcon(
+                  onPressed: onResubmit,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Resubmit'),
+                ),
+              const Spacer(),
+              Chip(
+                avatar: const Icon(Icons.layers_outlined, size: 16),
+                label: Text('${paper.studentResubmissions.length} revisions'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InsightHeader extends StatelessWidget {
+  const _InsightHeader({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primary.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, size: 18, color: theme.colorScheme.primary),
+        ),
+        const SizedBox(width: 10),
+        Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+      ],
+    );
   }
 }
 

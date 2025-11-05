@@ -1,1 +1,63 @@
-{"firestore":{"rules":"firestore.rules","indexes":"firestore.indexes.json"},"hosting":{"public":"public","ignore":["firebase.json","**/.*","**/node_modules/**"],"rewrites":[{"source":"**","destination":"/index.html"}]},"storage":{"rules":"storage.rules"},"remoteconfig":{"template":"remoteconfig.template.json"},"flutter":{"platforms":{"android":{"default":{"projectId":"time-capsule-4612b","appId":"1:863606792588:android:9e48d03eb7934881f076a9","fileOutput":"android/app/google-services.json"}},"ios":{"default":{"projectId":"time-capsule-4612b","appId":"1:863606792588:ios:9f6bbf127a569d41f076a9","uploadDebugSymbols":false,"fileOutput":"ios/Runner/GoogleService-Info.plist"}},"dart":{"lib/firebase_options.dart":{"projectId":"time-capsule-4612b","configurations":{"android":"1:863606792588:android:9e48d03eb7934881f076a9","ios":"1:863606792588:ios:9f6bbf127a569d41f076a9","web":"1:863606792588:web:4ce7540814e51632f076a9"}}}}}}
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "hosting": {
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/papers",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/paper/**",
+        "destination": "/index.html"
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "remoteconfig": {
+    "template": "remoteconfig.template.json"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "time-capsule-4612b",
+          "appId": "1:863606792588:android:9e48d03eb7934881f076a9",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "time-capsule-4612b",
+          "appId": "1:863606792588:ios:9f6bbf127a569d41f076a9",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "time-capsule-4612b",
+          "configurations": {
+            "android": "1:863606792588:android:9e48d03eb7934881f076a9",
+            "ios": "1:863606792588:ios:9f6bbf127a569d41f076a9",
+            "web": "1:863606792588:web:4ce7540814e51632f076a9"
+          }
+        }
+      }
+    }
+  }
+}
