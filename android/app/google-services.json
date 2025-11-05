@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "863606792588",
+    "project_id": "time-capsule-4612b",
+    "storage_bucket": "time-capsule-4612b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:863606792588:android:f5335d358f45d41cf076a9",
+        "android_client_info": {
+          "package_name": "com.capsule.time.time_capsule"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCPd1-F8LEX2iH_meaXSalKol6LZUWBiAE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:863606792588:android:9e48d03eb7934881f076a9",
+        "android_client_info": {
+          "package_name": "in.khoinchha.app.kohinchha"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCPd1-F8LEX2iH_meaXSalKol6LZUWBiAE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
