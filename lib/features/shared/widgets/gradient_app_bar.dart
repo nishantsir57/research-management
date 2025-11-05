@@ -35,13 +35,16 @@ class GradientAppBar extends StatelessWidget implements PreferredSizeWidget {
         bottom: false,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final isCompact = constraints.maxWidth < 720;
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Row(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1180),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final isCompact = constraints.maxWidth < 720;
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Row(
                     children: [
                       Container(
                         width: 44,
@@ -134,9 +137,11 @@ class GradientAppBar extends StatelessWidget implements PreferredSizeWidget {
                       ),
                     ],
                   ),
-                ],
-              );
-            },
+                    ],
+                  );
+                },
+              ),
+            ),
           ),
         ),
       ),

@@ -43,7 +43,7 @@ class AnimatedFilterBar extends StatefulWidget {
 }
 
 class _AnimatedFilterBarState extends State<AnimatedFilterBar> {
-  bool _showFilters = false;
+  bool _showFilters = true;
 
   @override
   Widget build(BuildContext context) {
@@ -70,12 +70,6 @@ class _AnimatedFilterBarState extends State<AnimatedFilterBar> {
                 style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
               const Spacer(),
-              if (_showFilters)
-                FilledButton.tonalIcon(
-                  onPressed: widget.onClearFilters,
-                  icon: const Icon(Icons.layers_clear_rounded),
-                  label: const Text('Reset'),
-                ),
               IconButton(
                 icon: AnimatedRotation(
                   turns: _showFilters ? 0.25 : 0,

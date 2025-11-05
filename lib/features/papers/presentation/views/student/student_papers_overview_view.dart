@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -75,7 +74,6 @@ class StudentPaperTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final formatter = DateFormat('MMM d, y • h:mm a');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -85,10 +83,6 @@ class StudentPaperTile extends ConsumerWidget {
           onTap: () => context.go('/paper/${paper.id}'),
           onShare: () => _sharePaper(context, paper),
           showAuthor: false,
-          highlightBadges: [
-            _badge(context, Icons.schedule_rounded, 'Submitted ${formatter.format(paper.createdAt)}'),
-            _badge(context, Icons.visibility_rounded, paper.visibility.name.toUpperCase()),
-          ],
         ),
         const SizedBox(height: 12),
         _PaperInsights(
@@ -97,24 +91,6 @@ class StudentPaperTile extends ConsumerWidget {
           onOpenFile: paper.fileUrl != null ? () => _openFile(context, paper.fileUrl!) : null,
         ),
       ],
-    );
-  }
-
-  Widget _badge(BuildContext context, IconData icon, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(width: 6),
-          Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: Theme.of(context).colorScheme.primary)),
-        ],
-      ),
     );
   }
 

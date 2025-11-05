@@ -173,8 +173,23 @@ class _NavButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final background = isSelected ? theme.colorScheme.primary.withOpacity(0.12) : Colors.transparent;
-    final foreground = isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant;
+    final foreground = isSelected ? Colors.white : theme.colorScheme.onSurfaceVariant;
+    final decoration = isSelected
+        ? BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF4338CA), Color(0xFF2563EB), Color(0xFF7C3AED)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: const [
+              BoxShadow(color: Color(0x553138A6), blurRadius: 18, offset: Offset(0, 12)),
+            ],
+          )
+        : BoxDecoration(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(18),
+          );
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: InkWell(
@@ -184,10 +199,7 @@ class _NavButton extends StatelessWidget {
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOutCubic,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(18),
-          ),
+          decoration: decoration,
           child: Row(
             children: [
               Icon(item.icon, color: foreground),

@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../../core/models/app_user.dart';
 import '../../../../../core/models/research_paper.dart';
@@ -9,28 +10,25 @@ import '../../../shared/widgets/user_avatar.dart';
 import '../../domain/comment_providers.dart';
 import 'status_badge.dart';
 
-/// Animated, design-system aligned card showcasing a research paper summary.
 class PaperCard extends ConsumerStatefulWidget {
   const PaperCard({
     super.key,
     required this.paper,
     this.heroTag,
+    this.author,
     this.onTap,
     this.onShare,
-    this.author,
-    this.highlightBadges,
-    this.showStatus = true,
     this.showAuthor = true,
+    this.showStatus = true,
   });
 
   final ResearchPaper paper;
   final String? heroTag;
+  final AppUser? author;
   final VoidCallback? onTap;
   final VoidCallback? onShare;
-  final AppUser? author;
-  final List<Widget>? highlightBadges;
-  final bool showStatus;
   final bool showAuthor;
+  final bool showStatus;
 
   @override
   ConsumerState<PaperCard> createState() => _PaperCardState();
@@ -41,44 +39,105 @@ class _PaperCardState extends ConsumerState<PaperCard> {
 
   @override
   Widget build(BuildContext context) {
-    final disableAnimations = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final commentCountAsync = ref.watch(paperCommentCountProvider(widget.paper.id));
-    final commentCount = commentCountAsync.maybeWhen(data: (value) => value, orElse: () => null);
-    final metrics = _EngagementMetrics.fromPaper(widget.paper, commentCount);
+    final commentCount = commentCountAsync.valueOrNull;
 
-    final content = _PaperCardBody(
-      paper: widget.paper,
-      author: widget.author,
-      metrics: metrics,
-      commentCountPending: commentCount == null && commentCountAsync.isLoading,
-      onTap: widget.onTap,
-      onShare: widget.onShare,
-      highlightBadges: widget.highlightBadges,
-      showStatus: widget.showStatus,
-      showAuthor: widget.showAuthor,
+    final metrics = _EngagementMetrics.fromPaper(widget.paper, commentCount);
+    final formattedDate = DateFormat('MMM d, y').format(widget.paper.createdAt);
+
+    final card = Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(24),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: widget.onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _CoverSection(paper: widget.paper, showStatus: widget.showStatus),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.paper.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: const Color(0xFF1E1B4B),
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _MetaPill(label: widget.paper.department, color: const Color(0xFF4338CA).withOpacity(0.12), textColor: const Color(0xFF4338CA)),
+                      _MetaPill(label: widget.paper.subject, color: const Color(0xFF7C3AED).withOpacity(0.12), textColor: const Color(0xFF7C3AED)),
+                      _MetaPill(label: formattedDate, color: const Color(0xFF0EA5E9).withOpacity(0.12), textColor: const Color(0xFF0EA5E9)),
+                      _MetaPill(label: widget.paper.visibility.name.toUpperCase(), color: const Color(0xFF6366F1).withOpacity(0.12), textColor: const Color(0xFF6366F1)),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    _abstractPreview(widget.paper),
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: const Color(0xFF4B5563),
+                          height: 1.5,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            if (widget.showAuthor)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  children: [
+                    const Divider(height: 28),
+                    _AuthorRow(paper: widget.paper, author: widget.author),
+                  ],
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+              child: _ActionsBar(
+                metrics: metrics,
+                onShare: widget.onShare,
+                onRead: widget.onTap,
+                commentCountPending: commentCountAsync.isLoading && commentCount == null,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
 
     final heroWrapped = widget.heroTag == null
-        ? content
-        : Hero(tag: widget.heroTag!, flightShuttleBuilder: _flightBuilder, child: content);
+        ? card
+        : Hero(tag: widget.heroTag!, child: card);
 
     return MouseRegion(
-      onEnter: disableAnimations ? null : (_) => setState(() => _hovering = true),
-      onExit: disableAnimations ? null : (_) => setState(() => _hovering = false),
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
       child: AnimatedScale(
-        scale: disableAnimations || !_hovering ? 1 : 1.02,
-        duration: disableAnimations ? Duration.zero : const Duration(milliseconds: 220),
+        scale: _hovering ? 1.02 : 1,
+        duration: const Duration(milliseconds: 200),
         curve: Curves.easeOutCubic,
         child: AnimatedContainer(
-          duration: disableAnimations ? Duration.zero : const Duration(milliseconds: 240),
+          duration: const Duration(milliseconds: 220),
           curve: Curves.easeOut,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.06),
-                blurRadius: disableAnimations || !_hovering ? 14 : 28,
-                offset: Offset(0, disableAnimations || !_hovering ? 12 : 20),
+                color: Colors.black.withOpacity(_hovering ? 0.08 : 0.04),
+                blurRadius: _hovering ? 26 : 18,
+                offset: const Offset(0, 18),
               ),
             ],
           ),
@@ -88,182 +147,113 @@ class _PaperCardState extends ConsumerState<PaperCard> {
     );
   }
 
-  Widget _flightBuilder(
-    BuildContext context,
-    Animation<double> animation,
-    HeroFlightDirection direction,
-    BuildContext fromContext,
-    BuildContext toContext,
-  ) {
-    final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInExpo);
-    return ScaleTransition(scale: Tween(begin: 0.96, end: 1.0).animate(curved), child: toContext.widget);
+  String _abstractPreview(ResearchPaper paper) {
+    final content = paper.contentText?.trim();
+    if (content == null || content.isEmpty) {
+      return 'This paper is available as a downloadable document. Tap to explore the findings and commentary.';
+    }
+    if (content.length <= 260) return content;
+    return '${content.substring(0, 260)}…';
   }
 }
 
-class _PaperCardBody extends StatelessWidget {
-  const _PaperCardBody({
-    required this.paper,
-    required this.metrics,
-    required this.commentCountPending,
-    this.author,
-    this.onTap,
-    this.onShare,
-    this.highlightBadges,
-    this.showStatus = true,
-    this.showAuthor = true,
-  });
+class _CoverSection extends StatelessWidget {
+  const _CoverSection({required this.paper, required this.showStatus});
 
   final ResearchPaper paper;
-  final AppUser? author;
-  final _EngagementMetrics metrics;
-  final bool commentCountPending;
-  final VoidCallback? onTap;
-  final VoidCallback? onShare;
-  final List<Widget>? highlightBadges;
   final bool showStatus;
-  final bool showAuthor;
 
   @override
   Widget build(BuildContext context) {
-    final gradient = _subjectGradient(paper.subject);
-    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w700,
-          height: 1.3,
-          color: const Color(0xFF1E1B4B),
-        );
-
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(28),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Stack(
-              children: [
-                Container(
-                  height: 150,
-                  decoration: BoxDecoration(
-                    gradient: gradient,
-                  ),
-                  child: Align(
-                    alignment: Alignment.bottomLeft,
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Text(
-                        paper.subject,
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                              color: Colors.white.withOpacity(0.9),
-                              letterSpacing: 0.4,
-                            ),
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: 20,
-                  left: 20,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.school_rounded, size: 16, color: Colors.white),
-                          const SizedBox(width: 6),
-                          Text(
-                            paper.department,
-                            style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Colors.white),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                if (showStatus)
-                  Positioned(
-                    top: 18,
-                    right: 18,
-                    child: StatusBadge(status: paper.status, compact: true),
-                  ),
-              ],
+    return SizedBox(
+      height: 160,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: _subjectGradient(paper.subject),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 22, 24, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(paper.title, style: titleStyle, maxLines: 2, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 10),
-                  Text(
-                    _abstractPreview(paper),
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: const Color(0xFF4B5563), height: 1.45),
-                  ),
-                  const SizedBox(height: 20),
-                  if ((highlightBadges?.isNotEmpty ?? false))
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Wrap(
-                        spacing: 10,
-                        runSpacing: 8,
-                        children: highlightBadges!,
-                      ),
-                    ),
-                  if (showAuthor) _AuthorRow(paper: paper, author: author),
-                  const SizedBox(height: 16),
-                  _EngagementRow(
-                    metrics: metrics,
-                    commentCountPending: commentCountPending,
-                    onShare: onShare,
-                    onRead: onTap,
-                  ),
+          ),
+          Positioned(
+            top: 18,
+            left: 20,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.school_rounded, color: Colors.white, size: 16),
+                  SizedBox(width: 8),
+                  Text('Featured Research', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+          if (showStatus)
+            Positioned(
+              top: 18,
+              right: 18,
+              child: StatusBadge(status: paper.status, compact: true),
+            ),
+        ],
       ),
     );
   }
 
-  String _abstractPreview(ResearchPaper paper) {
-    final abstract = paper.contentText?.trim();
-    if (abstract == null || abstract.isEmpty) {
-      return 'This paper is available as a downloadable document. Open to explore the full findings and visuals.';
-    }
-    if (abstract.length <= 240) return abstract;
-    return '${abstract.substring(0, 240)}…';
-  }
-
   LinearGradient _subjectGradient(String subject) {
-    final subjectKey = subject.toLowerCase();
-    final gradients = <String, List<Color>>{
-      'machine learning': const [Color(0xFF4338CA), Color(0xFF2563EB)],
-      'ai': const [Color(0xFF7C3AED), Color(0xFF6366F1)],
-      'biology': const [Color(0xFF059669), Color(0xFF34D399)],
-      'genetics': const [Color(0xFF0EA5E9), Color(0xFF8B5CF6)],
-      'physics': const [Color(0xFF14B8A6), Color(0xFF2563EB)],
-      'quantum': const [Color(0xFF2563EB), Color(0xFF7C3AED)],
-      'renewable': const [Color(0xFFF97316), Color(0xFF2563EB)],
-    };
+    final key = subject.toLowerCase();
+    const palettes = [
+      _GradientMatch(pattern: 'machine', colors: [Color(0xFF4338CA), Color(0xFF2563EB), Color(0xFF7C3AED)]),
+      _GradientMatch(pattern: 'ai', colors: [Color(0xFF7C3AED), Color(0xFF6366F1), Color(0xFF4F46E5)]),
+      _GradientMatch(pattern: 'bio', colors: [Color(0xFF10B981), Color(0xFF34D399), Color(0xFF0EA5E9)]),
+      _GradientMatch(pattern: 'physics', colors: [Color(0xFF14B8A6), Color(0xFF2563EB), Color(0xFF7C3AED)]),
+      _GradientMatch(pattern: 'energy', colors: [Color(0xFFF97316), Color(0xFFF59E0B), Color(0xFF2563EB)]),
+      _GradientMatch(pattern: 'block', colors: [Color(0xFF6366F1), Color(0xFF22D3EE), Color(0xFF0EA5E9)]),
+    ];
 
-    final colors = gradients.entries.firstWhere(
-      (entry) => subjectKey.contains(entry.key),
-      orElse: () => const MapEntry('default', [Color(0xFF312E81), Color(0xFF7C3AED)]),
-    ).value;
+    final match = palettes.firstWhere(
+      (palette) => key.contains(palette.pattern),
+      orElse: () => const _GradientMatch(
+        pattern: 'default',
+        colors: [Color(0xFF312E81), Color(0xFF4338CA), Color(0xFF7C3AED)],
+      ),
+    );
 
     return LinearGradient(
-      colors: colors,
+      colors: match.colors,
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
+    );
+  }
+}
+
+class _MetaPill extends StatelessWidget {
+  const _MetaPill({required this.label, required this.color, required this.textColor});
+
+  final String label;
+  final Color color;
+  final Color textColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: textColor,
+              fontWeight: FontWeight.w600,
+            ),
+      ),
     );
   }
 }
@@ -276,99 +266,82 @@ class _AuthorRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final authorName = author?.fullName ?? 'Researcher';
-    final dateLabel = _formatDate(paper.createdAt);
+    final name = author?.fullName ?? 'Researcher';
+    final dateLabel = DateFormat('MMM d, y').format(paper.createdAt);
+    final subtitle = switch (paper.status) {
+      PaperStatus.published => 'Published $dateLabel',
+      PaperStatus.approved => 'Approved $dateLabel',
+      PaperStatus.reverted => 'Revisions requested $dateLabel',
+      PaperStatus.underReview => 'Under review since $dateLabel',
+      PaperStatus.aiReview => 'AI review started $dateLabel',
+      PaperStatus.submitted => 'Submitted $dateLabel',
+    };
 
     return Row(
       children: [
-        UserAvatar(heroTag: 'paper-avatar-${paper.id}', initials: authorName, size: 42),
+        UserAvatar(heroTag: 'paper-avatar-${paper.id}', initials: name, size: 40),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(authorName, style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 2),
-              Text(
-                dateLabel,
-                style: Theme.of(context)
-                    .textTheme
-                    .labelSmall
-                    ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-              ),
+              Text(name, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+              Text(subtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ],
           ),
         ),
       ],
     );
   }
-
-  String _formatDate(DateTime dateTime) {
-    const monthNames = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${monthNames[dateTime.month - 1]} ${dateTime.day}, ${dateTime.year}';
-  }
 }
 
-class _EngagementRow extends StatelessWidget {
-  const _EngagementRow({
+class _ActionsBar extends StatelessWidget {
+  const _ActionsBar({
     required this.metrics,
+    required this.onShare,
+    required this.onRead,
     required this.commentCountPending,
-    this.onShare,
-    this.onRead,
   });
 
   final _EngagementMetrics metrics;
-  final bool commentCountPending;
   final VoidCallback? onShare;
   final VoidCallback? onRead;
+  final bool commentCountPending;
 
   @override
   Widget build(BuildContext context) {
-    final iconColor = Theme.of(context).colorScheme.onSurfaceVariant;
+    final theme = Theme.of(context);
 
-    return Row(
+    final actions = [
+      _ActionButton(icon: Icons.favorite_border_rounded, label: metrics.likes.toString(), color: const Color(0xFFE11D48)),
+      _ActionButton(
+        icon: Icons.mode_comment_outlined,
+        label: commentCountPending ? '…' : metrics.comments.toString(),
+        color: const Color(0xFF2563EB),
+      ),
+      _ActionButton(icon: Icons.remove_red_eye_outlined, label: metrics.views.toString(), color: const Color(0xFF4338CA)),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _StatPill(icon: Icons.favorite_border_rounded, label: metrics.likes.toString(), color: iconColor),
-        const SizedBox(width: 12),
-        _StatPill(
-          icon: Icons.mode_comment_outlined,
-          label: commentCountPending ? '…' : metrics.comments.toString(),
-          color: iconColor,
-        ),
-        const SizedBox(width: 12),
-        _StatPill(icon: Icons.remove_red_eye_outlined, label: metrics.views.toString(), color: iconColor),
-        const Spacer(),
-        IconButton(
-          tooltip: 'Share paper',
-          onPressed: onShare,
-          icon: const Icon(Icons.ios_share_rounded),
-        ),
-        const SizedBox(width: 4),
-        FilledButton.icon(
-          onPressed: onRead,
-          icon: const Icon(Icons.book_outlined),
-          label: const Text('Read'),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          alignment: WrapAlignment.start,
+          children: [
+            for (final action in actions) action,
+            _ShareChip(onShare: onShare),
+            _ReadButton(onTap: onRead, theme: theme),
+          ],
         ),
       ],
     );
   }
 }
 
-class _StatPill extends StatelessWidget {
-  const _StatPill({required this.icon, required this.label, required this.color});
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({required this.icon, required this.label, required this.color});
 
   final IconData icon;
   final String label;
@@ -377,18 +350,92 @@ class _StatPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFFF5F7FF),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.2)),
+        color: color.withOpacity(0.06),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 6),
-          Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: color)),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 18),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(color: color, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ShareChip extends StatelessWidget {
+  const _ShareChip({this.onShare});
+
+  final VoidCallback? onShare;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onShare,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          color: const Color(0xFFF4F3FF),
+          border: Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.24)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.ios_share_rounded, color: Color(0xFF7C3AED), size: 18),
+            SizedBox(width: 6),
+            Text('Share', style: TextStyle(color: Color(0xFF7C3AED), fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReadButton extends StatelessWidget {
+  const _ReadButton({required this.onTap, required this.theme});
+
+  final VoidCallback? onTap;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF4338CA), Color(0xFF2563EB), Color(0xFF7C3AED)],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: const [
+            BoxShadow(color: Color(0x663138A6), blurRadius: 18, offset: Offset(0, 10)),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.book_outlined, color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+              Text('Read', style: theme.textTheme.labelLarge?.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -403,11 +450,11 @@ class _EngagementMetrics {
 
   factory _EngagementMetrics.fromPaper(ResearchPaper paper, int? commentCount) {
     final seed = _hashSeed(paper.id);
-    final likes = 40 + seed % 120;
-    final views = 300 + (seed * 3) % 2200;
+    final likes = 80 + seed % 160;
+    final views = 420 + (seed * 3) % 2800;
     return _EngagementMetrics(
       likes: likes,
-      comments: commentCount ?? max(4, seed % 25),
+      comments: commentCount ?? max(4, seed % 32),
       views: views,
     );
   }
@@ -419,4 +466,11 @@ class _EngagementMetrics {
     }
     return hash;
   }
+}
+
+class _GradientMatch {
+  const _GradientMatch({required this.pattern, required this.colors});
+
+  final String pattern;
+  final List<Color> colors;
 }

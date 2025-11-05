@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter/services.dart';
-import 'package:lottie/lottie.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/models/app_user.dart';
@@ -117,24 +116,10 @@ class _PaperListPageState extends ConsumerState<PaperListPage> {
                                 final author = authorAsync.value;
                                 return PaperCard(
                                   paper: paper,
-                                  author: author,
                                   heroTag: 'paper-card-${paper.id}',
+                                  author: author,
                                   onTap: () => _openPaper(context, paper.id),
                                   onShare: () => _sharePaper(context, paper),
-                                  highlightBadges: [
-                                    _buildBadge(
-                                      context,
-                                      icon: Icons.visibility_rounded,
-                                      label: paper.visibility.name.toUpperCase(),
-                                      color: Theme.of(context).colorScheme.primary,
-                                    ),
-                                    _buildBadge(
-                                      context,
-                                      icon: Icons.schedule_rounded,
-                                      label: 'Updated ${_relativeTime(paper.updatedAt)}',
-                                      color: Theme.of(context).colorScheme.secondary,
-                                    ),
-                                  ],
                                 );
                               },
                               itemCount: filtered.length,
@@ -193,14 +178,6 @@ class _PaperListPageState extends ConsumerState<PaperListPage> {
     if (maxWidth >= 900) return 3;
     if (maxWidth >= 600) return 2;
     return 1;
-  }
-
-  String _relativeTime(DateTime dateTime) {
-    final diff = DateTime.now().difference(dateTime);
-    if (diff.inDays >= 1) return '${diff.inDays}d ago';
-    if (diff.inHours >= 1) return '${diff.inHours}h ago';
-    if (diff.inMinutes >= 1) return '${diff.inMinutes}m ago';
-    return 'Just now';
   }
 
   void _openPaper(BuildContext context, String paperId) {
@@ -278,24 +255,6 @@ class _PaperListPageState extends ConsumerState<PaperListPage> {
     final popularity = _popularityScore(paper) + paper.updatedAt.millisecondsSinceEpoch % 50;
     return popularity / recency;
   }
-
-  Widget _buildBadge(BuildContext context, {required IconData icon, required String label, required Color color}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 6),
-          Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: color)),
-        ],
-      ),
-    );
-  }
 }
 
 class _EmptyState extends StatelessWidget {
@@ -305,37 +264,52 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            height: 180,
-            child: Lottie.network(
-              'https://assets10.lottiefiles.com/datafiles/nJVVWbK8Xlg7h0o/data.json',
-              repeat: true,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(32),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 28, offset: const Offset(0, 18)),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 92,
+              height: 92,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [Color(0xFF4338CA), Color(0xFF2563EB), Color(0xFF7C3AED)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: const Icon(Icons.library_books_outlined, color: Colors.white, size: 42),
             ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No papers match your filters just yet',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Try widening your filters or explore new disciplines.',
-            style: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-          ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: onReset,
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Reset filters'),
-          ),
-        ],
+            const SizedBox(height: 20),
+            Text(
+              'No papers match your filters',
+              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Try adjusting the filters or reset them to explore more research.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: onReset,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Reset filters'),
+            ),
+          ],
+        ),
       ),
     );
   }
