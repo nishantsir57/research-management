@@ -30,18 +30,6 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
   @override
   void initState() {
     super.initState();
-    ref.listen(authControllerProvider, (previous, next) {
-      if (previous?.hasError != true && next.hasError) {
-        final message = next.error?.toString() ?? 'Sign up failed.';
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(message)),
-            );
-          }
-        });
-      }
-    });
   }
 
   @override
@@ -61,7 +49,9 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
       orElse: () => Department(id: '', name: '', subjects: const []),
     );
 
-    await ref.read(authControllerProvider.notifier).signUp(
+    await ref
+        .read(authControllerProvider.notifier)
+        .signUp(
           fullName: _fullNameController.text.trim(),
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
@@ -73,6 +63,21 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
 
   @override
   Widget build(BuildContext context) {
+    // Use ref.listen inside build (WidgetRef) to avoid Riverpod assertion when
+    // registering listeners outside of the ConsumerWidget build phase.
+    ref.listen(authControllerProvider, (previous, next) {
+      if (previous?.hasError != true && next.hasError) {
+        final message = next.error?.toString() ?? 'Sign up failed.';
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(message)));
+          }
+        });
+      }
+    });
+
     final departmentsAsync = ref.watch(departmentsStreamProvider);
     final authState = ref.watch(authControllerProvider);
     final isLoading = authState.isLoading;
@@ -95,8 +100,14 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
                 const SizedBox(height: 24),
                 SegmentedButton<UserRole>(
                   segments: const [
-                    ButtonSegment(value: UserRole.student, label: Text('Student')),
-                    ButtonSegment(value: UserRole.reviewer, label: Text('Reviewer')),
+                    ButtonSegment(
+                      value: UserRole.student,
+                      label: Text('Student'),
+                    ),
+                    ButtonSegment(
+                      value: UserRole.reviewer,
+                      label: Text('Reviewer'),
+                    ),
                   ],
                   selected: <UserRole>{_role},
                   onSelectionChanged: (roles) {
@@ -154,7 +165,9 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
                           border: const OutlineInputBorder(),
                           suffixIcon: IconButton(
                             icon: Icon(
-                              _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                              _obscurePassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
                             ),
                             onPressed: () => setState(() {
                               _obscurePassword = !_obscurePassword;
@@ -182,7 +195,9 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
                           border: const OutlineInputBorder(),
                           suffixIcon: IconButton(
                             icon: Icon(
-                              _obscureConfirm ? Icons.visibility_off : Icons.visibility,
+                              _obscureConfirm
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
                             ),
                             onPressed: () => setState(() {
                               _obscureConfirm = !_obscureConfirm;
@@ -236,7 +251,8 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
                     subjects: departments
                         .firstWhere(
                           (dept) => dept.id == _selectedDepartmentId,
-                          orElse: () => Department(id: '', name: '', subjects: const []),
+                          orElse: () =>
+                              Department(id: '', name: '', subjects: const []),
                         )
                         .subjects,
                     selected: _selectedSubjects,
@@ -250,7 +266,9 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
                   ),
                 const SizedBox(height: 24),
                 FilledButton(
-                  onPressed: isLoading ? null : () => _handleSubmit(departments),
+                  onPressed: isLoading
+                      ? null
+                      : () => _handleSubmit(departments),
                   child: isLoading
                       ? const SizedBox(
                           height: 20,
@@ -282,7 +300,10 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
                         children: const [
                           Text(
                             'ResearchHub',
-                            style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              fontSize: 48,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                           SizedBox(height: 12),
                           Text(
@@ -310,10 +331,7 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: form,
-                ),
+                child: Padding(padding: const EdgeInsets.all(32), child: form),
               ),
             ),
           );

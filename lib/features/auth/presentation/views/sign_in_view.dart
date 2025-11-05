@@ -20,18 +20,6 @@ class _SignInViewState extends ConsumerState<SignInView> {
   @override
   void initState() {
     super.initState();
-    ref.listen(authControllerProvider, (previous, next) {
-      if (previous?.hasError != true && next.hasError) {
-        final message = next.error?.toString() ?? 'Sign in failed.';
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(message)),
-            );
-          }
-        });
-      }
-    });
   }
 
   @override
@@ -44,7 +32,9 @@ class _SignInViewState extends ConsumerState<SignInView> {
   Future<void> _handleSubmit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    await ref.read(authControllerProvider.notifier).signIn(
+    await ref
+        .read(authControllerProvider.notifier)
+        .signIn(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
@@ -52,6 +42,20 @@ class _SignInViewState extends ConsumerState<SignInView> {
 
   @override
   Widget build(BuildContext context) {
+    // Move ref.listen into build so it is called with a WidgetRef during build.
+    ref.listen(authControllerProvider, (previous, next) {
+      if (previous?.hasError != true && next.hasError) {
+        final message = next.error?.toString() ?? 'Sign in failed.';
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(message)));
+          }
+        });
+      }
+    });
+
     final authState = ref.watch(authControllerProvider);
     final isLoading = authState.isLoading;
 
@@ -100,7 +104,9 @@ class _SignInViewState extends ConsumerState<SignInView> {
                         border: const OutlineInputBorder(),
                         suffixIcon: IconButton(
                           icon: Icon(
-                            _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                            _obscurePassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
                           ),
                           onPressed: () => setState(() {
                             _obscurePassword = !_obscurePassword;

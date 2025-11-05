@@ -10,7 +10,7 @@ plugins {
 
 android {
     namespace = "in.khoinchha.app.kohinchha"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36//flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -27,8 +27,8 @@ android {
         applicationId = "in.khoinchha.app.kohinchha"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        minSdk = 28//flutter.minSdkVersion
+        targetSdk = 36//flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }

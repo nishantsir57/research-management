@@ -18,10 +18,12 @@ class StudentPaperSubmissionView extends ConsumerStatefulWidget {
   final AppUser user;
 
   @override
-  ConsumerState<StudentPaperSubmissionView> createState() => _StudentPaperSubmissionViewState();
+  ConsumerState<StudentPaperSubmissionView> createState() =>
+      _StudentPaperSubmissionViewState();
 }
 
-class _StudentPaperSubmissionViewState extends ConsumerState<StudentPaperSubmissionView> {
+class _StudentPaperSubmissionViewState
+    extends ConsumerState<StudentPaperSubmissionView> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
@@ -37,16 +39,6 @@ class _StudentPaperSubmissionViewState extends ConsumerState<StudentPaperSubmiss
   @override
   void initState() {
     super.initState();
-    ref.listen(paperSubmissionControllerProvider, (previous, next) {
-      if (previous?.hasError != true && next.hasError) {
-        final message = next.error?.toString() ?? 'Failed to submit paper.';
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-          }
-        });
-      }
-    });
   }
 
   @override
@@ -96,7 +88,9 @@ class _StudentPaperSubmissionViewState extends ConsumerState<StudentPaperSubmiss
       orElse: () => Department(id: '', name: '', subjects: const []),
     );
 
-    await ref.read(paperSubmissionControllerProvider.notifier).submitPaper(
+    await ref
+        .read(paperSubmissionControllerProvider.notifier)
+        .submitPaper(
           author: widget.user,
           title: _titleController.text.trim(),
           department: department.name,
@@ -131,13 +125,28 @@ class _StudentPaperSubmissionViewState extends ConsumerState<StudentPaperSubmiss
 
   @override
   Widget build(BuildContext context) {
+    // Listen to submission controller changes here (WidgetRef available).
+    ref.listen(paperSubmissionControllerProvider, (previous, next) {
+      if (previous?.hasError != true && next.hasError) {
+        final message = next.error?.toString() ?? 'Failed to submit paper.';
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(message)));
+          }
+        });
+      }
+    });
+
     final departmentsAsync = ref.watch(departmentsStreamProvider);
     final submissionState = ref.watch(paperSubmissionControllerProvider);
     final aiEnabled = ref.watch(aiReviewEnabledProvider);
 
     return departmentsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => Center(child: Text('Unable to load departments: $error')),
+      error: (error, _) =>
+          Center(child: Text('Unable to load departments: $error')),
       data: (departments) {
         final selectedDepartment = departments.firstWhere(
           (dept) => dept.id == _departmentId,
@@ -215,7 +224,9 @@ class _StudentPaperSubmissionViewState extends ConsumerState<StudentPaperSubmiss
                                   border: OutlineInputBorder(),
                                 ),
                                 validator: (value) =>
-                                    (value == null || value.isEmpty) ? 'Select a department' : null,
+                                    (value == null || value.isEmpty)
+                                    ? 'Select a department'
+                                    : null,
                               ),
                             ),
                             const SizedBox(width: 16),
@@ -230,13 +241,16 @@ class _StudentPaperSubmissionViewState extends ConsumerState<StudentPaperSubmiss
                                       ),
                                     )
                                     .toList(),
-                                onChanged: (value) => setState(() => _subject = value),
+                                onChanged: (value) =>
+                                    setState(() => _subject = value),
                                 decoration: const InputDecoration(
                                   labelText: 'Subject',
                                   border: OutlineInputBorder(),
                                 ),
                                 validator: (value) =>
-                                    (value == null || value.isEmpty) ? 'Select a subject' : null,
+                                    (value == null || value.isEmpty)
+                                    ? 'Select a subject'
+                                    : null,
                               ),
                             ),
                           ],
@@ -244,8 +258,14 @@ class _StudentPaperSubmissionViewState extends ConsumerState<StudentPaperSubmiss
                         const SizedBox(height: 16),
                         SegmentedButton<bool>(
                           segments: const [
-                            ButtonSegment(value: true, label: Text('Upload File')),
-                            ButtonSegment(value: false, label: Text('Use Editor')),
+                            ButtonSegment(
+                              value: true,
+                              label: Text('Upload File'),
+                            ),
+                            ButtonSegment(
+                              value: false,
+                              label: Text('Use Editor'),
+                            ),
                           ],
                           selected: <bool>{_uploadFile},
                           onSelectionChanged: (value) => setState(() {
@@ -273,7 +293,8 @@ class _StudentPaperSubmissionViewState extends ConsumerState<StudentPaperSubmiss
                               border: OutlineInputBorder(),
                             ),
                             validator: (value) {
-                              if (!_uploadFile && (value == null || value.trim().isEmpty)) {
+                              if (!_uploadFile &&
+                                  (value == null || value.trim().isEmpty)) {
                                 return 'Please provide the paper content.';
                               }
                               return null;
@@ -287,7 +308,8 @@ class _StudentPaperSubmissionViewState extends ConsumerState<StudentPaperSubmiss
                                 (visibility) => ChoiceChip(
                                   label: Text(visibility.name.toUpperCase()),
                                   selected: _visibility == visibility,
-                                  onSelected: (_) => setState(() => _visibility = visibility),
+                                  onSelected: (_) =>
+                                      setState(() => _visibility = visibility),
                                 ),
                               )
                               .toList(),
@@ -340,10 +362,9 @@ class _FilePickerSection extends StatelessWidget {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               border: Border.all(
-                color: Theme.of(context)
-                    .colorScheme
-                    .primary
-                    .withAlpha((0.2 * 255).round()),
+                color: Theme.of(
+                  context,
+                ).colorScheme.primary.withAlpha((0.2 * 255).round()),
               ),
               borderRadius: BorderRadius.circular(8),
             ),
@@ -358,14 +379,13 @@ class _FilePickerSection extends StatelessWidget {
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 4),
-                      Text('${(pickedFile!.size / 1024).toStringAsFixed(1)} KB'),
+                      Text(
+                        '${(pickedFile!.size / 1024).toStringAsFixed(1)} KB',
+                      ),
                     ],
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: onClear,
-                ),
+                IconButton(icon: const Icon(Icons.clear), onPressed: onClear),
               ],
             ),
           ),
