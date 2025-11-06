@@ -1,11 +1,17 @@
-import 'package:flutter/foundation.dart';
-import 'package:flutter_web_plugins/url_strategy.dart';
+import 'dart:async';
 
-import 'bootstrap.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'app/app.dart';
+import 'core/services/firebase_providers.dart';
 
 Future<void> main() async {
-  if (kIsWeb) {
-    usePathUrlStrategy();
-  }
-  await bootstrap();
+  await runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    await initializeFirebase();
+    runApp(const ProviderScope(child: KohinchhaApp()));
+  }, (error, stackTrace) {
+    FlutterError.presentError(FlutterErrorDetails(exception: error, stack: stackTrace));
+  });
 }
