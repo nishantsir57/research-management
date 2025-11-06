@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../data/models/research_paper.dart';
@@ -102,6 +103,14 @@ class _AssignmentCard extends StatelessWidget {
                 ),
               ),
             ],
+            if (paper.fileUrl != null) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () => _openFile(context, paper.fileUrl!),
+                icon: const Icon(Icons.cloud_download_outlined),
+                label: const Text('Download manuscript'),
+              ),
+            ],
           ],
         ),
       ),
@@ -200,19 +209,38 @@ class _AssignmentCard extends StatelessWidget {
                               paper.abstractText,
                               style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
                             ),
+                            if (paper.fileUrl != null) ...[
+                              const SizedBox(height: 16),
+                              OutlinedButton.icon(
+                                onPressed: () => _openFile(context, paper.fileUrl!),
+                                icon: const Icon(Icons.cloud_download_outlined),
+                                label: const Text('Download manuscript'),
+                              ),
+                            ],
                             if (paper.content != null) ...[
                               const SizedBox(height: 16),
-                              ExpansionTile(
-                                title: const Text('Full text'),
-                                children: [
-                                  Text(
-                                    paper.content!,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
-                                        ?.copyWith(height: 1.6),
+                              Text('Full text', style: Theme.of(context).textTheme.titleMedium),
+                              const SizedBox(height: 8),
+                              Container(
+                                constraints: const BoxConstraints(maxHeight: 260),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: AppColors.gray200),
+                                  color: Colors.white,
+                                ),
+                                child: Scrollbar(
+                                  thumbVisibility: true,
+                                  child: SingleChildScrollView(
+                                    child: SelectableText(
+                                      paper.content!,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(height: 1.6),
+                                    ),
                                   ),
-                                ],
+                                ),
                               ),
                             ],
                             const SizedBox(height: 16),
@@ -377,5 +405,16 @@ class _AssignmentCard extends StatelessWidget {
         );
       },
     );
+  }
+
+  Future<void> _openFile(BuildContext context, String url) async {
+    final uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to open file')),
+        );
+      }
+    }
   }
 }

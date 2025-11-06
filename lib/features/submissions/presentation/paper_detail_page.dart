@@ -1,5 +1,7 @@
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../data/models/paper_comment.dart';
@@ -46,9 +48,20 @@ class _PaperDetailPageState extends State<PaperDetailPage> {
 
   String _userName(String userId) {
     return _userDirectoryController.users
-        .firstWhereOrNull((user) => user.id == userId)
-        ?.displayName ??
+            .firstWhereOrNull((user) => user.id == userId)
+            ?.displayName ??
         userId;
+  }
+
+  Future<void> _openFile(BuildContext context, String url) async {
+    final uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to open file')),
+        );
+      }
+    }
   }
 
   String _departmentName(String departmentId) {
@@ -119,6 +132,14 @@ class _PaperDetailPageState extends State<PaperDetailPage> {
                         ],
                       ),
                       const SizedBox(height: 24),
+                      if (paper.fileUrl != null) ...[
+                        OutlinedButton.icon(
+                          onPressed: () => _openFile(context, paper.fileUrl!),
+                          icon: const Icon(Icons.cloud_download_outlined),
+                          label: const Text('Download manuscript'),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
                       Text('Abstract', style: Theme
                           .of(context)
                           .textTheme
@@ -139,13 +160,27 @@ class _PaperDetailPageState extends State<PaperDetailPage> {
                             .textTheme
                             .titleMedium),
                         const SizedBox(height: 8),
-                        Text(
-                          paper.content!,
-                          style: Theme
-                              .of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(height: 1.6),
+                        Container(
+                          constraints: const BoxConstraints(maxHeight: 320),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.gray200),
+                            color: Colors.white,
+                          ),
+                          child: Scrollbar(
+                            thumbVisibility: true,
+                            child: SingleChildScrollView(
+                              child: SelectableText(
+                                paper.content!,
+                                style: Theme
+                                    .of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(height: 1.6),
+                              ),
+                            ),
+                          ),
                         ),
                       ],
                       if (paper.aiReview != null) ...[

@@ -1,6 +1,7 @@
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/router.dart';
 import '../../../core/constants/app_colors.dart';
@@ -38,6 +39,7 @@ class _PublishedWallPageState extends State<PublishedWallPage> {
     return Obx(() {
       final departments = _departmentController.departments;
       final papers = _submissionController.publishedPapers.where((paper) {
+        if (paper.visibility != PaperVisibility.public) return false;
         final departmentMatches =
             _departmentFilter == null || paper.departmentId == _departmentFilter;
         final subjectMatches = _subjectFilter == null || paper.subjectId == _subjectFilter;
@@ -143,6 +145,9 @@ class _PublishedWallPageState extends State<PublishedWallPage> {
                         ownerName: _userName(paper.ownerId),
                         departmentName: _departmentName(paper.departmentId),
                         subjectName: _subjectName(paper.departmentId, paper.subjectId),
+                        onOpenFile: paper.fileUrl == null
+                            ? null
+                            : () => _openFile(context, paper.fileUrl!),
                       ),
                     )
                     .toList(),
@@ -176,6 +181,17 @@ class _PublishedWallPageState extends State<PublishedWallPage> {
             ?.name ??
         subjectId;
   }
+
+  Future<void> _openFile(BuildContext context, String url) async {
+    final uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to open file')),
+        );
+      }
+    }
+  }
 }
 
 class _PublishedCard extends StatelessWidget {
@@ -184,12 +200,14 @@ class _PublishedCard extends StatelessWidget {
     required this.ownerName,
     required this.departmentName,
     required this.subjectName,
+    this.onOpenFile,
   });
 
   final ResearchPaper paper;
   final String ownerName;
   final String departmentName;
   final String subjectName;
+  final VoidCallback? onOpenFile;
 
   @override
   Widget build(BuildContext context) {
@@ -222,6 +240,14 @@ class _PublishedCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
             ),
+            if (onOpenFile != null) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: onOpenFile,
+                icon: const Icon(Icons.cloud_download_outlined),
+                label: const Text('Download manuscript'),
+              ),
+            ],
             const SizedBox(height: 12),
             Wrap(
               spacing: 12,
