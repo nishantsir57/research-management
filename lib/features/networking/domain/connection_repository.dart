@@ -37,10 +37,18 @@ class ConnectionRepository {
     required String recipientId,
   }) async {
     final existing = await _requests
-        .where('participants', arrayContains: requesterId)
-        .where('participants', arrayContains: recipientId)
+        .where('requesterId', isEqualTo: requesterId)
+        .where('recipientId', isEqualTo: recipientId)
+        .limit(1)
         .get();
     if (existing.docs.isNotEmpty) return;
+
+    final reverse = await _requests
+        .where('requesterId', isEqualTo: recipientId)
+        .where('recipientId', isEqualTo: requesterId)
+        .limit(1)
+        .get();
+    if (reverse.docs.isNotEmpty) return;
 
     final doc = _requests.doc(_uuid.v4());
     await doc.set({

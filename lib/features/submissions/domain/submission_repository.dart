@@ -29,6 +29,8 @@ class SubmissionRepository {
 
   static const _papersCollection = 'papers';
   static const _commentsCollection = 'comments';
+  static const double _minQualityScore = 60;
+  static const double _maxPlagiarismRisk = 30;
   final _uuid = const Uuid();
 
   CollectionReference<Map<String, dynamic>> get _papers =>
@@ -165,22 +167,21 @@ class SubmissionRepository {
       storagePath = path;
     }
 
-    final assignedReviewerId = await _assignReviewer(departmentId: departmentId);
     final now = DateTime.now();
 
     final paper = ResearchPaper(
       id: docRef.id,
       title: title,
       ownerId: student.id,
-      primaryReviewerId: assignedReviewerId,
-      reviewerIds: assignedReviewerId != null ? [assignedReviewerId] : const [],
+      primaryReviewerId: null,
+      reviewerIds: const [],
       abstractText: abstractText,
       content: plainTextContent,
       fileUrl: fileUrl,
       storagePath: storagePath,
       format: format,
       visibility: visibility,
-      status: PaperStatus.submitted,
+      status: PaperStatus.aiReview,
       departmentId: departmentId,
       subjectId: subjectId,
       tags: tags ?? const [],
@@ -189,37 +190,16 @@ class SubmissionRepository {
       updatedAt: now,
     );
 
-    final json = _paperToJson(paper);
-    await docRef.set(json);
+    await docRef.set(_paperToJson(paper));
 
-    final settings = await _fetchSettings();
-    AiReviewResult? aiReview;
-    if (settings.aiPreReviewEnabled && _geminiService.isConfigured) {
-      try {
-        final review = await _geminiService.generatePreReview(
-          paper: paper,
-          plainTextContent: plainTextContent,
-        );
-        aiReview = review;
-        await docRef.update({
-          'aiReview': _aiReviewToJson(review),
-          'status': PaperStatus.aiReview.name,
-        });
-      } catch (error) {
-        debugPrint('AI review failed: $error');
-      }
-    }
-
-    if (aiReview != null) {
-      return paper.copyWith(
-        aiReview: aiReview,
-        status: PaperStatus.aiReview,
-      );
-    }
-    return paper;
+    return _handleAiAndAssignment(
+      docRef: docRef,
+      paper: paper,
+      plainTextContent: plainTextContent,
+    );
   }
 
-  Future<void> resubmitPaper({
+  Future<ResearchPaper> resubmitPaper({
     required ResearchPaper paper,
     String? updatedContent,
     File? newFile,
@@ -246,13 +226,150 @@ class SubmissionRepository {
       storagePath = path;
     }
 
-    await _papers.doc(paper.id).update({
+    final docRef = _papers.doc(paper.id);
+    final updatedPaper = paper.copyWith(
+      content: updatedContent ?? paper.content,
+      fileUrl: fileUrl,
+      storagePath: storagePath,
+      status: PaperStatus.aiReview,
+      aiReview: null,
+      updatedAt: DateTime.now(),
+    );
+
+    await docRef.update({
       if (updatedContent != null) 'content': updatedContent,
       'fileUrl': fileUrl,
       'storagePath': storagePath,
-      'status': PaperStatus.submitted.name,
+      'status': PaperStatus.aiReview.name,
+      'aiReview': FieldValue.delete(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+
+    return _handleAiAndAssignment(
+      docRef: docRef,
+      paper: updatedPaper,
+      plainTextContent: updatedContent?.trim().isNotEmpty == true
+          ? updatedContent
+          : updatedPaper.content,
+    );
+  }
+
+  Future<ResearchPaper> _handleAiAndAssignment({
+    required DocumentReference<Map<String, dynamic>> docRef,
+    required ResearchPaper paper,
+    String? plainTextContent,
+    AppSettings? settings,
+  }) async {
+    final appSettings = settings ?? await _fetchSettings();
+    final aiEnabled = appSettings.aiPreReviewEnabled && _geminiService.isConfigured;
+
+    if (aiEnabled) {
+      try {
+        final review = await _geminiService.generatePreReview(
+          paper: paper,
+          plainTextContent: plainTextContent,
+        );
+        if (_aiReviewPassed(review)) {
+          return _assignReviewerForDoc(
+            docRef: docRef,
+            paper: paper,
+            extraUpdates: {
+              'aiReview': _aiReviewToJson(review),
+            },
+            statusWhenAssigned: PaperStatus.underReview,
+            statusWhenUnassigned: PaperStatus.submitted,
+          );
+        }
+
+        await docRef.update({
+          'aiReview': _aiReviewToJson(review),
+          'status': PaperStatus.revisionsRequested.name,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        final snapshot = await docRef.get();
+        return _paperFromDoc(snapshot);
+      } catch (error, stackTrace) {
+        debugPrint('AI review error: $error\n$stackTrace');
+        // fall through to reviewer assignment without AI
+      }
+    }
+
+    return _assignReviewerForDoc(
+      docRef: docRef,
+      paper: paper,
+      statusWhenAssigned: PaperStatus.underReview,
+      statusWhenUnassigned: PaperStatus.submitted,
+    );
+  }
+
+  Future<ResearchPaper> _assignReviewerForDoc({
+    required DocumentReference<Map<String, dynamic>> docRef,
+    required ResearchPaper paper,
+    Map<String, dynamic>? extraUpdates,
+    PaperStatus statusWhenAssigned = PaperStatus.underReview,
+    PaperStatus statusWhenUnassigned = PaperStatus.submitted,
+  }) async {
+    final updates = <String, dynamic>{
+      'updatedAt': FieldValue.serverTimestamp(),
+      if (extraUpdates != null) ...extraUpdates,
+    };
+
+    String? reviewerId = paper.primaryReviewerId;
+    if (reviewerId == null || reviewerId.isEmpty) {
+      reviewerId = await _assignReviewer(departmentId: paper.departmentId);
+    }
+
+    if (reviewerId != null) {
+      updates['primaryReviewerId'] = reviewerId;
+      updates['reviewerIds'] = FieldValue.arrayUnion([reviewerId]);
+      updates['status'] = statusWhenAssigned.name;
+    } else {
+      updates['status'] = statusWhenUnassigned.name;
+    }
+
+    await docRef.update(updates);
+    final snapshot = await docRef.get();
+    return _paperFromDoc(snapshot);
+  }
+
+  bool _aiReviewPassed(AiReviewResult review) {
+    return review.qualityScore >= _minQualityScore &&
+        review.plagiarismRisk <= _maxPlagiarismRisk;
+  }
+
+  Future<void> ensureStudentPipeline(String studentId) async {
+    final pendingSnapshot = await _papers
+        .where('ownerId', isEqualTo: studentId)
+        .where('status', whereIn: [
+          PaperStatus.aiReview.name,
+          PaperStatus.submitted.name,
+        ])
+        .get();
+    if (pendingSnapshot.docs.isEmpty) return;
+
+    final settings = await _fetchSettings();
+
+    for (final doc in pendingSnapshot.docs) {
+      final paper = _paperFromDoc(doc);
+      final docRef = doc.reference;
+
+      if (paper.status == PaperStatus.aiReview && paper.aiReview == null) {
+        await _handleAiAndAssignment(
+          docRef: docRef,
+          paper: paper,
+          plainTextContent: paper.content,
+          settings: settings,
+        );
+      } else if (paper.status == PaperStatus.submitted &&
+          (paper.primaryReviewerId == null || paper.primaryReviewerId!.isEmpty)) {
+        await _assignReviewerForDoc(
+          docRef: docRef,
+          paper: paper,
+          statusWhenAssigned: PaperStatus.underReview,
+          statusWhenUnassigned: PaperStatus.submitted,
+        );
+      }
+    }
   }
 
   Future<void> updatePaperVisibility({

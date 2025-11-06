@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../common/widgets/user_avatar_button.dart';
+import '../../submissions/presentation/published_wall_page.dart';
 import 'admin_pages.dart';
 
 class AdminShellPage extends StatefulWidget {
@@ -15,6 +16,11 @@ class _AdminShellPageState extends State<AdminShellPage> {
   int _currentIndex = 0;
 
   final _pages = const [
+    PublishedWallPage(
+      title: 'Published research wall',
+      subtitle:
+          'Explore verified publications across Kohinchha and drill into their discussions.',
+    ),
     AdminDashboardPage(),
     AdminDepartmentsPage(),
     AdminUsersPage(),
@@ -23,6 +29,7 @@ class _AdminShellPageState extends State<AdminShellPage> {
   ];
 
   final _navItems = const [
+    _NavItem(Icons.auto_stories_outlined, 'Wall'),
     _NavItem(Icons.dashboard_outlined, 'Dashboard'),
     _NavItem(Icons.account_tree_outlined, 'Departments'),
     _NavItem(Icons.people_outlined, 'Users'),

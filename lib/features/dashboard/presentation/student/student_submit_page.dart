@@ -94,8 +94,8 @@ class _StudentSubmitPaperPageState extends State<StudentSubmitPaperPage> {
     }
 
     try {
-      await _loadingController.during(() async {
-        await _submissionController.submitPaper(
+      final paper = await _loadingController.during(() {
+        return _submissionController.submitPaper(
           title: _titleController.text.trim(),
           abstractText: _abstractController.text.trim(),
           content: _useTextSubmission ? _contentController.text.trim() : null,
@@ -112,10 +112,47 @@ class _StudentSubmitPaperPageState extends State<StudentSubmitPaperPage> {
       });
 
       if (!mounted) return;
-      _showSnack('Paper submitted successfully.', AppColors.success);
+      _showSubmissionFeedback(paper);
       _resetForm();
     } catch (error) {
       _showSnack('Submission failed: $error', AppColors.error);
+    }
+  }
+
+  void _showSubmissionFeedback(ResearchPaper paper) {
+    switch (paper.status) {
+      case PaperStatus.revisionsRequested:
+        _showSnack(
+          'AI review requested revisions. See the feedback dialog for details.',
+          AppColors.warning,
+        );
+        final aiReview = paper.aiReview;
+        if (aiReview != null) {
+          _showAiFeedbackDialog(aiReview);
+        }
+        break;
+      case PaperStatus.underReview:
+        _showSnack(
+          paper.primaryReviewerId != null
+              ? 'AI approved your paper and it is now with a reviewer.'
+              : 'AI approved your paper. Awaiting reviewer confirmation.',
+          AppColors.success,
+        );
+        break;
+      case PaperStatus.submitted:
+        _showSnack(
+          'AI approved your paper. Awaiting reviewer assignment.',
+          AppColors.info,
+        );
+        break;
+      case PaperStatus.aiReview:
+        _showSnack(
+          'Your paper is queued for AI review. This will complete shortly.',
+          AppColors.indigo600,
+        );
+        break;
+      default:
+        _showSnack('Paper submitted successfully.', AppColors.success);
     }
   }
 
@@ -145,6 +182,84 @@ class _StudentSubmitPaperPageState extends State<StudentSubmitPaperPage> {
         content: Text(message),
         backgroundColor: color,
       ),
+    );
+  }
+
+  Future<void> _showAiFeedbackDialog(AiReviewResult review) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        Widget bullet(String text) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('• '),
+                Expanded(
+                  child: Text(
+                    text,
+                    style: Theme.of(dialogContext).textTheme.bodyMedium,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return AlertDialog(
+          title: const Text('AI review feedback'),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  review.summary,
+                  style: Theme.of(dialogContext).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Quality score: ${review.qualityScore.toStringAsFixed(1)}',
+                  style: Theme.of(dialogContext)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  'Plagiarism risk: ${review.plagiarismRisk.toStringAsFixed(1)}%',
+                  style: Theme.of(dialogContext).textTheme.bodySmall,
+                ),
+                if (review.strengths.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    'Strengths',
+                    style: Theme.of(dialogContext).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 4),
+                  ...review.strengths.map(bullet),
+                ],
+                if (review.improvements.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    'Recommended improvements',
+                    style: Theme.of(dialogContext).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 4),
+                  ...review.improvements.map(bullet),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
     );
   }
 

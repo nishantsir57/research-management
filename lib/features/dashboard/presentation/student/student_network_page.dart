@@ -45,11 +45,13 @@ class StudentNetworkPage extends StatelessWidget {
                   .map(
                     (user) => _UserCard(
                       user: user,
-                      request: requests.firstWhereOrNull((request){
-                        final participantIds = [request.id, request.recipientId];
-                        return participantIds.contains(currentUser.id) &&
-                            participantIds.contains(user.id);
-                      }),
+                      request: requests.firstWhereOrNull(
+                        (request) =>
+                            (request.requesterId == currentUser.id &&
+                                request.recipientId == user.id) ||
+                            (request.requesterId == user.id &&
+                                request.recipientId == currentUser.id),
+                      ),
                     ),
                   )
                   .toList(),

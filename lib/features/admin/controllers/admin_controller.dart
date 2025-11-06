@@ -146,6 +146,13 @@ class AdminController extends GetxController {
     required String paperId,
     required String reviewerId,
   }) async {
+    final reviewer = allUsers.firstWhereOrNull((user) => user.id == reviewerId);
+    if (reviewer == null || !reviewer.isReviewer || reviewer.isBlocked) {
+      throw StateError('Selected reviewer is not available.');
+    }
+    if (!reviewer.isReviewerApproved) {
+      throw StateError('Reviewer must be approved before assignment.');
+    }
     await _submissionRepository.reassignReviewer(
       paperId: paperId,
       reviewerId: reviewerId,

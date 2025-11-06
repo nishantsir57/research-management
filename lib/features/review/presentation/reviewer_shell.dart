@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../common/widgets/user_avatar_button.dart';
+import '../../submissions/presentation/published_wall_page.dart';
 import 'reviewer/reviewer_assigned_page.dart';
 import 'reviewer/reviewer_dashboard_page.dart';
 import 'reviewer/reviewer_discussions_page.dart';
@@ -19,6 +20,11 @@ class _ReviewerShellPageState extends State<ReviewerShellPage> {
   int _currentIndex = 0;
 
   final _pages = const [
+    PublishedWallPage(
+      title: 'Research wall',
+      subtitle:
+          'Review the latest published papers and join active discussions with students and admins.',
+    ),
     ReviewerDashboardPage(),
     ReviewerAssignedPapersPage(),
     ReviewerHistoryPage(),
@@ -27,6 +33,7 @@ class _ReviewerShellPageState extends State<ReviewerShellPage> {
   ];
 
   final _navItems = const [
+    _NavItem(Icons.auto_stories_outlined, 'Wall'),
     _NavItem(Icons.dashboard_customize_outlined, 'Dashboard'),
     _NavItem(Icons.task_outlined, 'Assigned Papers'),
     _NavItem(Icons.history_outlined, 'Reviewed'),

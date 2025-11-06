@@ -37,7 +37,7 @@ class SubmissionController extends GetxController {
     _restartStreams();
   }
 
-  Future<void> submitPaper({
+  Future<ResearchPaper> submitPaper({
     required String title,
     required String abstractText,
     required PaperFormat format,
@@ -55,7 +55,7 @@ class SubmissionController extends GetxController {
     if (user == null) {
       throw StateError('Not authenticated');
     }
-    await _repository.submitPaper(
+    return _repository.submitPaper(
       student: user,
       title: title,
       abstractText: abstractText,
@@ -72,14 +72,14 @@ class SubmissionController extends GetxController {
     );
   }
 
-  Future<void> resubmitPaper({
+  Future<ResearchPaper> resubmitPaper({
     required ResearchPaper paper,
     String? updatedContent,
     File? newFile,
     Uint8List? newFileBytes,
     String? newFileName,
   }) async {
-    await _repository.resubmitPaper(
+    return _repository.resubmitPaper(
       paper: paper,
       updatedContent: updatedContent,
       newFile: newFile,
@@ -173,14 +173,17 @@ class SubmissionController extends GetxController {
     if (user.role == AuthRole.student) {
       _studentSub = _repository.watchStudentPapers(user.id).listen(studentPapers.assignAll);
       _startPublishedStream();
+      unawaited(_repository.ensureStudentPipeline(user.id));
     } else if (user.role == AuthRole.reviewer) {
       _reviewerAssignedSub = _repository
           .watchReviewerAssignments(user.id)
           .listen(reviewerAssignments.assignAll);
       _reviewerHistorySub =
           _repository.watchReviewerHistory(user.id).listen(reviewerHistory.assignAll);
+      _startPublishedStream();
     } else if (user.role == AuthRole.admin) {
       _studentSub = _repository.watchAllPapers().listen(allPapersListener);
+      _startPublishedStream();
     }
   }
 

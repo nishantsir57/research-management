@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+
+import '../../../app/router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../data/models/app_user.dart';
 import '../../../data/models/department.dart';
@@ -227,55 +229,104 @@ class AdminPapersPage extends StatelessWidget {
   const AdminPapersPage({super.key});
 
   AdminController get _adminController => Get.find<AdminController>();
-  SubmissionController get _submissionController => Get.find<SubmissionController>();
+  DepartmentController get _departmentController => Get.find<DepartmentController>();
 
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final papers = _submissionController.studentPapers;
-      final reviewerController = TextEditingController();
+      final papers = _adminController.allPapers;
+      final users = _adminController.allUsers;
+      final departments = _departmentController.departments;
+
+      if (papers.isEmpty) {
+        return const Center(child: Text('No submissions yet.'));
+      }
+
       return ListView.builder(
         padding: const EdgeInsets.all(24),
         itemCount: papers.length,
         itemBuilder: (context, index) {
           final paper = papers[index];
+          final owner =
+              users.firstWhereOrNull((user) => user.id == paper.ownerId)?.displayName ??
+                  paper.ownerId;
+          final primaryReviewer = paper.primaryReviewerId != null
+              ? users.firstWhereOrNull((user) => user.id == paper.primaryReviewerId)?.displayName ??
+                  paper.primaryReviewerId!
+              : 'Unassigned';
+          final departmentName = departments
+                  .firstWhereOrNull((dept) => dept.id == paper.departmentId)
+                  ?.name ??
+              paper.departmentId;
+          final statusColor = _statusColor(paper.status);
+
           return Card(
             margin: const EdgeInsets.only(bottom: 16),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
             child: Padding(
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(paper.title, style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Owner: ${paper.ownerId} • Status: ${paper.status.label}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.gray500,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          paper.title,
+                          style: Theme.of(context).textTheme.titleLarge,
                         ),
+                      ),
+                      Chip(
+                        label: Text(paper.status.label),
+                        backgroundColor: statusColor.withValues(alpha: 0.12),
+                        labelStyle: TextStyle(
+                          color: statusColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: reviewerController,
-                    decoration: InputDecoration(
-                      labelText: 'Assign reviewer by ID',
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.swap_horiz),
-                        onPressed: () async {
-                          final reviewerId = reviewerController.text.trim();
-                          if (reviewerId.isEmpty) return;
-                          await _adminController.reassignReviewer(
-                            paperId: paper.id,
-                            reviewerId: reviewerId,
-                          );
-                          reviewerController.clear();
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Reassigned to $reviewerId')),
-                          );
-                        },
-                      ),
+                  _InfoRow(
+                    icon: Icons.person_outline,
+                    label: 'Student',
+                    value: owner,
+                  ),
+                  _InfoRow(
+                    icon: Icons.account_tree_outlined,
+                    label: 'Department',
+                    value: departmentName,
+                  ),
+                  _InfoRow(
+                    icon: Icons.verified_user_outlined,
+                    label: 'Primary reviewer',
+                    value: primaryReviewer,
+                  ),
+                  if (paper.aiReview != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: _AiSummaryChip(paper: paper),
+                    ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.manage_accounts_outlined),
+                          label: const Text('Reassign reviewer'),
+                          onPressed: () => _showReassignSheet(context, paper),
+                        ),
+                        TextButton.icon(
+                          icon: const Icon(Icons.open_in_new),
+                          label: const Text('View details'),
+                          onPressed: () => Get.toNamed(
+                            '${AppRoutes.paperDetail}/${paper.id}',
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -285,6 +336,237 @@ class AdminPapersPage extends StatelessWidget {
         },
       );
     });
+  }
+
+  Future<void> _showReassignSheet(BuildContext context, ResearchPaper paper) async {
+    final reviewers = _adminController.allUsers
+        .where(
+          (user) =>
+              user.isReviewer &&
+              user.isReviewerApproved &&
+              !user.isBlocked &&
+              user.departmentId == paper.departmentId,
+        )
+        .toList()
+      ..sort((a, b) => a.displayName.compareTo(b.displayName));
+
+    if (reviewers.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No approved reviewers found for this department.')),
+        );
+      }
+      return;
+    }
+
+    await showModalBottomSheet<AppUser>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        final searchController = TextEditingController();
+        AppUser? selected;
+        return StatefulBuilder(
+          builder: (context, setState) {
+            final query = searchController.text.trim().toLowerCase();
+            final filtered = reviewers.where((reviewer) {
+              if (query.isEmpty) return true;
+              return reviewer.displayName.toLowerCase().contains(query) ||
+                  reviewer.email.toLowerCase().contains(query);
+            }).toList();
+
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+                left: 24,
+                right: 24,
+                top: 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Reassign reviewer',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: searchController,
+                    onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search),
+                      hintText: 'Search reviewers',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 320),
+                    child: filtered.isEmpty
+                        ? const Center(child: Text('No reviewers match the search.'))
+                        : ListView.separated(
+                            shrinkWrap: true,
+                            itemBuilder: (context, index) {
+                              final reviewer = filtered[index];
+                              final isSelected = selected?.id == reviewer.id;
+                              return ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: AppColors.indigo600,
+                                  child: Text(
+                                    reviewer.displayName.substring(0, 1).toUpperCase(),
+                                    style: const TextStyle(color: Colors.white),
+                                  ),
+                                ),
+                                title: Text(reviewer.displayName),
+                                subtitle: Text(reviewer.email),
+                                trailing: isSelected
+                                    ? const Icon(Icons.check_circle, color: AppColors.indigo600)
+                                    : null,
+                                onTap: () => setState(() => selected = reviewer),
+                              );
+                            },
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemCount: filtered.length,
+                          ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: selected == null
+                          ? null
+                          : () async {
+                              try {
+                                await _adminController.reassignReviewer(
+                                  paperId: paper.id,
+                                  reviewerId: selected!.id,
+                                );
+                                if (!context.mounted) return;
+                                Navigator.of(context).pop();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content:
+                                        Text('Assigned to ${selected!.displayName}.'),
+                                  ),
+                                );
+                              } catch (error) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('$error')),
+                                  );
+                                }
+                              }
+                            },
+                      child: const Text('Assign reviewer'),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Color _statusColor(PaperStatus status) {
+    switch (status) {
+      case PaperStatus.submitted:
+      case PaperStatus.aiReview:
+      case PaperStatus.underReview:
+        return AppColors.indigo600;
+      case PaperStatus.revisionsRequested:
+        return AppColors.warning;
+      case PaperStatus.approved:
+      case PaperStatus.published:
+        return AppColors.success;
+      case PaperStatus.rejected:
+        return AppColors.error;
+      case PaperStatus.draft:
+        return AppColors.gray500;
+    }
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: AppColors.gray500),
+          const SizedBox(width: 8),
+          Text(
+            '$label:',
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              value,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AiSummaryChip extends StatelessWidget {
+  const _AiSummaryChip({required this.paper});
+
+  final ResearchPaper paper;
+
+  @override
+  Widget build(BuildContext context) {
+    final aiReview = paper.aiReview;
+    if (aiReview == null) return const SizedBox.shrink();
+    final passed = paper.status != PaperStatus.revisionsRequested;
+    final color = passed ? AppColors.success : AppColors.warning;
+    final label = passed ? 'AI pre-review passed' : 'AI requested changes';
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: color.withValues(alpha: 0.12),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            passed ? Icons.auto_awesome_outlined : Icons.error_outline,
+            color: color,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              '$label • Quality ${(aiReview.qualityScore).toStringAsFixed(1)}, '
+              'Plagiarism ${(aiReview.plagiarismRisk).toStringAsFixed(1)}%',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: color, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

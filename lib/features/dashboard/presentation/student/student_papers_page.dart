@@ -234,7 +234,7 @@ class _StudentMyPapersPageState extends State<StudentMyPapersPage> {
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: () async {
-                        await _submissionController.resubmitPaper(
+                        final updatedPaper = await _submissionController.resubmitPaper(
                           paper: paper,
                           updatedContent: contentController.text.trim().isEmpty
                               ? null
@@ -245,7 +245,7 @@ class _StudentMyPapersPageState extends State<StudentMyPapersPage> {
                         );
                         if (!mounted) return;
                         Navigator.of(context).pop();
-                        _showSnack('Paper resubmitted for review');
+                        _showPipelineUpdate(updatedPaper);
                       },
                       child: const Text('Resubmit'),
                     ),
@@ -263,6 +263,107 @@ class _StudentMyPapersPageState extends State<StudentMyPapersPage> {
   void _showSnack(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
+    );
+  }
+
+  void _showPipelineUpdate(ResearchPaper paper) {
+    switch (paper.status) {
+      case PaperStatus.revisionsRequested:
+        _showSnack('AI review requested additional changes. See feedback for details.');
+        final aiReview = paper.aiReview;
+        if (aiReview != null) {
+          _showAiFeedbackDialog(aiReview);
+        }
+        break;
+      case PaperStatus.underReview:
+        _showSnack('Paper resubmitted. Reviewer has been notified.');
+        break;
+      case PaperStatus.submitted:
+        _showSnack('Paper resubmitted. Awaiting reviewer assignment.');
+        break;
+      case PaperStatus.aiReview:
+        _showSnack('Paper resubmitted and queued for AI review.');
+        break;
+      default:
+        _showSnack('Paper resubmitted for review.');
+    }
+  }
+
+  Future<void> _showAiFeedbackDialog(AiReviewResult review) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        Widget bullet(String text) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('• '),
+                Expanded(
+                  child: Text(
+                    text,
+                    style: Theme.of(dialogContext).textTheme.bodyMedium,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return AlertDialog(
+          title: const Text('AI review feedback'),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  review.summary,
+                  style: Theme.of(dialogContext).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Quality score: ${review.qualityScore.toStringAsFixed(1)}',
+                  style: Theme.of(dialogContext)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  'Plagiarism risk: ${review.plagiarismRisk.toStringAsFixed(1)}%',
+                  style: Theme.of(dialogContext).textTheme.bodySmall,
+                ),
+                if (review.strengths.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    'Strengths',
+                    style: Theme.of(dialogContext).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 4),
+                  ...review.strengths.map(bullet),
+                ],
+                if (review.improvements.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    'Recommended improvements',
+                    style: Theme.of(dialogContext).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 4),
+                  ...review.improvements.map(bullet),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
     );
   }
 }
