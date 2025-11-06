@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -30,24 +28,11 @@ import '../features/review/presentation/reviewer/reviewer_history_page.dart';
 import '../features/review/presentation/reviewer/reviewer_settings_page.dart';
 import '../features/review/presentation/reviewer_shell.dart';
 
-/// A small ChangeNotifier that listens to a [Stream] and notifies listeners on events.
-/// Used to hook streams (like auth/user stream) into GoRouter's refreshListenable.
-class GoRouterRefreshStream extends ChangeNotifier {
-  GoRouterRefreshStream(Stream<dynamic> stream) {
-    _sub = stream.asBroadcastStream().listen((_) => notifyListeners());
-  }
-
-  late final StreamSubscription<dynamic> _sub;
-
-  @override
-  void dispose() {
-    _sub.cancel();
-    super.dispose();
-  }
-}
-
 final routerProvider = Provider<GoRouter>((ref) {
-  final appUserStream = ref.watch(appUserStreamProvider.stream);
+  // Create a simple notifier that triggers when the current app user changes.
+  final refreshListenable = ValueNotifier<int>(0);
+  ref.listen<AsyncValue<AppUser?>>(appUserStreamProvider, (_, __) => refreshListenable.value++);
+  ref.onDispose(() => refreshListenable.dispose());
   final authState = ref.watch(authControllerProvider);
 
   String? determineRedirect(BuildContext context, GoRouterState state, AppUser? user) {
@@ -85,7 +70,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/',
     debugLogDiagnostics: false,
-  refreshListenable: GoRouterRefreshStream(appUserStream),
+    refreshListenable: refreshListenable,
     redirect: (context, state) {
       if (authState.isLoading) return null;
       final user = ref.read(currentAppUserProvider);

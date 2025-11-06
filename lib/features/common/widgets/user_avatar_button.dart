@@ -23,8 +23,8 @@ class UserAvatarButton extends ConsumerWidget {
             context.go('/${user.role.name}/settings');
             break;
           case _MenuAction.signOut:
-            await ref.read(authControllerProvider.notifier).signOut();
-            context.go('/');
+            ref.read(authControllerProvider.notifier).signOut().then((data) => context.go('/'));
+            // context.go('/');
             break;
         }
       },
