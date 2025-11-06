@@ -5,11 +5,12 @@ import '../../../../core/models/app_settings.dart';
 import '../../../../core/models/app_user.dart';
 import '../../../../core/models/department.dart';
 import '../../../../core/models/research_paper.dart';
-import '../../../auth/domain/auth_providers.dart';
 import '../../../admin/domain/settings_providers.dart';
+import '../../../auth/domain/auth_providers.dart';
 import '../../../papers/domain/paper_providers.dart';
 import '../../../shared/domain/department_providers.dart';
 import '../../../shared/domain/user_providers.dart';
+import '../../../shared/widgets/gradient_app_bar.dart';
 
 class AdminDashboardView extends ConsumerStatefulWidget {
   const AdminDashboardView({super.key});
@@ -18,51 +19,99 @@ class AdminDashboardView extends ConsumerStatefulWidget {
   ConsumerState<AdminDashboardView> createState() => _AdminDashboardViewState();
 }
 
-class _AdminDashboardViewState extends ConsumerState<AdminDashboardView>
-    with SingleTickerProviderStateMixin {
-  late final TabController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TabController(length: 5, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+class _AdminDashboardViewState extends ConsumerState<AdminDashboardView> {
+  int _index = 0;
 
   @override
   Widget build(BuildContext context) {
     final settingsAsync = ref.watch(appSettingsStreamProvider);
+    final List<({String label, IconData icon, Widget Function(WidgetRef) builder})> sections = [
+      (label: 'Automation', icon: Icons.auto_awesome_outlined, builder: (WidgetRef ref) => _SettingsTab(settingsAsync: settingsAsync)),
+      (label: 'Departments', icon: Icons.apartment_outlined, builder: (WidgetRef ref) => const _DepartmentsTab()),
+      (label: 'Reviewers', icon: Icons.verified_user_outlined, builder: (WidgetRef ref) => const _ReviewersTab()),
+      (label: 'Users', icon: Icons.people_alt_outlined, builder: (WidgetRef ref) => const _AdminsTab()),
+      (label: 'Papers', icon: Icons.library_books_outlined, builder: (WidgetRef ref) => const _PapersTab()),
+    ];
+
+
+
+    final content = sections[_index].builder(ref);
+    final isWide = MediaQuery.of(context).size.width >= 1100;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Admin Console'),
-        bottom: TabBar(
-          controller: _controller,
-          tabs: const [
-            Tab(text: 'Settings'),
-            Tab(text: 'Departments'),
-            Tab(text: 'Reviewers'),
-            Tab(text: 'Admins'),
-            Tab(text: 'Papers'),
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      appBar: GradientAppBar(
+        userName: ref.read(authUserChangesProvider).valueOrNull?.fullName ?? 'Admin',
+        onLogout: () => ref.read(authRepositoryProvider).signOut(),
+        onNotifications: () {},
+      ),
+      body: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (isWide)
+            _AdminNavPanel(
+              sections: sections,
+              selectedIndex: _index,
+              onSelect: (value) => setState(() => _index = value),
+            ),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(left: isWide ? 0 : 12, right: 16, top: 16, bottom: 24),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: content,
+              ),
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: isWide
+          ? null
+          : NavigationBar(
+              selectedIndex: _index,
+              destinations: sections
+                  .map((section) => NavigationDestination(icon: Icon(section.icon), label: section.label))
+                  .toList(),
+              onDestinationSelected: (value) => setState(() => _index = value),
+            ),
+    );
+  }
+}
+
+class _AdminNavPanel extends StatelessWidget {
+  const _AdminNavPanel({required this.sections, required this.selectedIndex, required this.onSelect});
+
+  final List sections;
+  final int selectedIndex;
+  final ValueChanged<int> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 20, 24),
+      child: Container(
+        width: 250,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 24, offset: const Offset(0, 18)),
           ],
         ),
-      ),
-      body: settingsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Error loading settings: $error')),
-        data: (settings) => TabBarView(
-          controller: _controller,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _SettingsTab(settings: settings),
-            const _DepartmentsTab(),
-            const _ReviewersTab(),
-            const _AdminsTab(),
-            const _PapersTab(),
+            const SizedBox(height: 20),
+            for (var i = 0; i < sections.length; i++)
+              _AdminNavButton(
+                label: sections[i].label,
+                icon: sections[i].icon,
+                isSelected: i == selectedIndex,
+                onTap: () => onSelect(i),
+                theme: theme,
+              ),
+            const Spacer(),
           ],
         ),
       ),
@@ -70,27 +119,83 @@ class _AdminDashboardViewState extends ConsumerState<AdminDashboardView>
   }
 }
 
-class _SettingsTab extends ConsumerWidget {
-  const _SettingsTab({required this.settings});
+class _AdminNavButton extends StatelessWidget {
+  const _AdminNavButton({required this.label, required this.icon, required this.isSelected, required this.onTap, required this.theme});
 
-  final AppSettings settings;
+  final String label;
+  final IconData icon;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = isSelected ? Colors.white : theme.colorScheme.onSurfaceVariant;
+    final decoration = isSelected
+        ? BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF4338CA), Color(0xFF2563EB), Color(0xFF7C3AED)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: const [
+              BoxShadow(color: Color(0x553138A6), blurRadius: 18, offset: Offset(0, 12)),
+            ],
+          )
+        : BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            color: Colors.transparent,
+          );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          decoration: decoration,
+          child: Row(
+            children: [
+              Icon(icon, color: foreground),
+              const SizedBox(width: 12),
+              Text(label, style: theme.textTheme.labelLarge?.copyWith(color: foreground, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsTab extends ConsumerWidget {
+  const _SettingsTab({required this.settingsAsync});
+
+  final AsyncValue<AppSettings> settingsAsync;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Automation', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 16),
-          SwitchListTile(
-            title: const Text('Enable Gemini AI pre-review'),
-            subtitle: const Text('Automatically run a Gemini summary before human review.'),
-            value: settings.aiReviewEnabled,
-            onChanged: (value) => ref.read(settingsRepositoryProvider).updateAIReview(value),
-          ),
-        ],
+    return settingsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => Center(child: Text('Error loading settings: $error')),
+      data: (settings) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Automation', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 16),
+            SwitchListTile.adaptive(
+              title: const Text('Enable Gemini AI pre-review'),
+              subtitle: const Text('Run Gemini analysis before assigning to reviewers.'),
+              value: settings.aiReviewEnabled,
+              onChanged: (value) => ref.read(settingsRepositoryProvider).updateAIReview(value),
+            ),
+          ],
+        ),
       ),
     );
   }

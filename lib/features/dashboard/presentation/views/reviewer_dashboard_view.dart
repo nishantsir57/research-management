@@ -9,6 +9,7 @@ import '../../../../core/models/reviewer_highlight.dart';
 import '../../../auth/domain/auth_providers.dart';
 import '../../../papers/domain/paper_providers.dart';
 import '../../../reviewer/domain/reviewer_review_controller.dart';
+import '../../../shared/widgets/gradient_app_bar.dart';
 
 class ReviewerDashboardView extends ConsumerStatefulWidget {
   const ReviewerDashboardView({super.key});
@@ -18,6 +19,7 @@ class ReviewerDashboardView extends ConsumerStatefulWidget {
 }
 
 class _ReviewerDashboardViewState extends ConsumerState<ReviewerDashboardView> {
+  int _index = 0;
   ResearchPaper? _selectedPaper;
 
   @override
@@ -37,51 +39,278 @@ class _ReviewerDashboardViewState extends ConsumerState<ReviewerDashboardView> {
   }
 
   Widget _buildDashboard(BuildContext context, AppUser reviewer) {
-    final papersAsync = ref.watch(reviewerAssignedPapersProvider(reviewer.uid));
+    final assignedAsync = ref.watch(reviewerAssignedPapersProvider(reviewer.uid));
+
+    final navItems = _navItems();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Reviewer Workspace'),
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      appBar: GradientAppBar(
+        userName: reviewer.fullName,
+        onLogout: () => ref.read(authRepositoryProvider).signOut(),
+        onNotifications: () {},
       ),
-      body: papersAsync.when(
+      body: assignedAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: Text('Failed to load papers: $error')),
-        data: (papers) {
-          if (papers.isEmpty) {
-            return const Center(child: Text('No papers assigned at the moment.'));
+        data: (assigned) {
+          final reviewed = assigned.where((paper) => paper.status != PaperStatus.submitted && paper.status != PaperStatus.underReview).toList();
+          final inReview = assigned.where((paper) => paper.status == PaperStatus.underReview || paper.status == PaperStatus.submitted).toList();
+          _selectedPaper ??= inReview.isNotEmpty ? inReview.first : (assigned.isNotEmpty ? assigned.first : null);
+
+          Widget buildContent() {
+            switch (_index) {
+              case 0:
+                return _ReviewerWorkspace(
+                  papers: inReview,
+                  selected: _selectedPaper,
+                  onSelected: (paper) => setState(() => _selectedPaper = paper),
+                );
+              case 1:
+                return _ReviewedPapersList(papers: reviewed);
+              case 2:
+                return const _ReviewerCommunityPlaceholder();
+              default:
+                return const SizedBox.shrink();
+            }
           }
 
-          _selectedPaper ??= papers.first;
+          final isWide = MediaQuery.of(context).size.width >= 1024;
+          final content = Padding(
+            padding: EdgeInsets.only(right: isWide ? 16 : 0, bottom: 24, left: isWide ? 0 : 8, top: 16),
+            child: buildContent(),
+          );
 
           return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SizedBox(
-                width: 320,
-                child: ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: papers.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final paper = papers[index];
-                    final isSelected = _selectedPaper?.id == paper.id;
-                    return ListTile(
-                      selected: isSelected,
-                      title: Text(paper.title),
-                      subtitle: Text('Status: ${paper.status.name}'),
-                      onTap: () => setState(() => _selectedPaper = paper),
-                    );
-                  },
+              if (isWide)
+                _ReviewerNavRail(
+                  items: navItems,
+                  selectedIndex: _index,
+                  onChanged: (value) => setState(() => _index = value),
                 ),
-              ),
-              const VerticalDivider(width: 1),
-              Expanded(
-                child: _selectedPaper == null
-                    ? const Center(child: Text('Select a paper to start reviewing.'))
-                    : _ReviewerPaperDetail(paper: _selectedPaper!),
-              ),
+              Expanded(child: content),
             ],
           );
         },
+      ),
+      bottomNavigationBar: MediaQuery.of(context).size.width >= 1024
+          ? null
+          : NavigationBar(
+              selectedIndex: _index,
+              destinations: navItems.map((item) => NavigationDestination(icon: Icon(item.icon), label: item.label)).toList(),
+              onDestinationSelected: (value) => setState(() => _index = value),
+            ),
+    );
+  }
+
+  List<_ReviewerNavItem> _navItems() {
+    return const [
+      _ReviewerNavItem(label: 'Workspace', icon: Icons.fact_check_outlined),
+      _ReviewerNavItem(label: 'Reviewed', icon: Icons.history_edu_outlined),
+      _ReviewerNavItem(label: 'Community', icon: Icons.forum_outlined),
+    ];
+  }
+}
+
+class _ReviewerNavItem {
+  const _ReviewerNavItem({required this.label, required this.icon});
+
+  final String label;
+  final IconData icon;
+}
+
+class _ReviewerNavRail extends StatelessWidget {
+  const _ReviewerNavRail({required this.items, required this.selectedIndex, required this.onChanged});
+
+  final List<_ReviewerNavItem> items;
+  final int selectedIndex;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 20, 24),
+      child: Container(
+        width: 240,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 24, offset: const Offset(0, 18)),
+          ],
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 16),
+            for (var i = 0; i < items.length; i++)
+              _ReviewerNavButton(
+                item: items[i],
+                isSelected: selectedIndex == i,
+                onTap: () => onChanged(i),
+              ),
+            const Spacer(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewerNavButton extends StatelessWidget {
+  const _ReviewerNavButton({required this.item, required this.isSelected, required this.onTap});
+
+  final _ReviewerNavItem item;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final foreground = isSelected ? Colors.white : theme.colorScheme.onSurfaceVariant;
+    final decoration = isSelected
+        ? BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF4338CA), Color(0xFF2563EB), Color(0xFF7C3AED)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: const [
+              BoxShadow(color: Color(0x553138A6), blurRadius: 18, offset: Offset(0, 12)),
+            ],
+          )
+        : BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            color: Colors.transparent,
+          );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: decoration,
+          child: Row(
+            children: [
+              Icon(item.icon, color: foreground),
+              const SizedBox(width: 12),
+              Text(item.label, style: theme.textTheme.labelLarge?.copyWith(color: foreground, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewerWorkspace extends StatefulWidget {
+  const _ReviewerWorkspace({required this.papers, required this.selected, required this.onSelected});
+
+  final List<ResearchPaper> papers;
+  final ResearchPaper? selected;
+  final ValueChanged<ResearchPaper> onSelected;
+
+  @override
+  State<_ReviewerWorkspace> createState() => _ReviewerWorkspaceState();
+}
+
+class _ReviewerWorkspaceState extends State<_ReviewerWorkspace> {
+  @override
+  Widget build(BuildContext context) {
+    if (widget.papers.isEmpty) {
+      return const Center(child: Text('No papers awaiting review right now.'));
+    }
+
+    final selected = widget.selected ?? widget.papers.first;
+
+    return Row(
+      children: [
+        SizedBox(
+          width: 320,
+          child: ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: widget.papers.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              final paper = widget.papers[index];
+              final isSelected = selected.id == paper.id;
+              return ListTile(
+                selected: isSelected,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                tileColor: isSelected ? const Color(0xFFEFF2FF) : Colors.white,
+                title: Text(paper.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+                subtitle: Text('Status: ${paper.status.name}'),
+                onTap: () => widget.onSelected(paper),
+              );
+            },
+          ),
+        ),
+        const VerticalDivider(width: 1),
+        Expanded(child: _ReviewerPaperDetail(paper: selected)),
+      ],
+    );
+  }
+}
+
+class _ReviewedPapersList extends StatelessWidget {
+  const _ReviewedPapersList({required this.papers});
+
+  final List<ResearchPaper> papers;
+
+  @override
+  Widget build(BuildContext context) {
+    if (papers.isEmpty) {
+      return const Center(child: Text('No completed reviews yet.')); 
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.all(24),
+      itemCount: papers.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 16),
+      itemBuilder: (context, index) {
+        final paper = papers[index];
+        return ListTile(
+          tileColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          title: Text(paper.title),
+          subtitle: Text('Final status: ${paper.status.name}'),
+        );
+      },
+    );
+  }
+}
+
+class _ReviewerCommunityPlaceholder extends StatelessWidget {
+  const _ReviewerCommunityPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 28),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 26, offset: const Offset(0, 18)),
+          ],
+        ),
+        child: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.forum_outlined, size: 42, color: Color(0xFF4338CA)),
+            SizedBox(height: 12),
+            Text('Community discussions coming soon', style: TextStyle(fontWeight: FontWeight.w600)),
+            SizedBox(height: 6),
+            Text('Public reviewer discussions will appear here once configured.'),
+          ],
+        ),
       ),
     );
   }
