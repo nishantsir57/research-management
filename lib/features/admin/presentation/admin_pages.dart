@@ -1,367 +1,336 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:get/get.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../data/models/app_settings.dart';
 import '../../../data/models/app_user.dart';
 import '../../../data/models/department.dart';
 import '../../../data/models/research_paper.dart';
 import '../../auth/domain/auth_role.dart';
-import '../../auth/providers/auth_controller.dart';
-import '../../submissions/providers/submission_providers.dart';
-import '../providers/admin_controller.dart';
-import '../providers/admin_providers.dart';
-import '../providers/admin_settings_provider.dart';
-import '../providers/department_providers.dart';
+import '../../submissions/controllers/submission_controller.dart';
+import '../controllers/admin_controller.dart';
+import '../controllers/department_controller.dart';
+import '../controllers/settings_controller.dart';
 
-class AdminDashboardPage extends ConsumerWidget {
+class AdminDashboardPage extends StatelessWidget {
   const AdminDashboardPage({super.key});
 
+  AdminController get _adminController => Get.find<AdminController>();
+  SubmissionController get _submissionController => Get.find<SubmissionController>();
+  SettingsController get _settingsController => Get.find<SettingsController>();
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final papersAsync = ref.watch(allPapersProvider);
-    final pendingReviewersAsync = ref.watch(pendingReviewersProvider);
-    final settingsAsync = ref.watch(appSettingsProvider);
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final papers = _submissionController.studentPapers;
+      final pendingReviewers = _adminController.pendingReviewers;
+      final settings = _settingsController.settings.value;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Platform health overview', style: Theme.of(context).textTheme.headlineMedium),
-          const SizedBox(height: 8),
-          Text(
-            'Monitor submissions, reviewer workload, and AI review usage.',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppColors.gray600),
-          ),
-          const SizedBox(height: 24),
-          papersAsync.when(
-            data: (papers) => pendingReviewersAsync.when(
-              data: (pendingReviewers) => settingsAsync.when(
-                data: (settings) {
-                  final activeSubmissions =
-                      papers.where((paper) => !paper.isPublished).length;
-                  final aiUsage =
-                      papers.where((paper) => paper.aiReview != null).length.toDouble();
-                  final aiPercentage =
-                      papers.isEmpty ? 0 : (aiUsage / papers.length * 100).round();
+      final activeSubmissions =
+          papers.where((paper) => !paper.isPublished && paper.status != PaperStatus.draft).length;
+      final aiUsage = papers.where((paper) => paper.aiReview != null).length;
+      final aiPercentage = papers.isEmpty ? 0 : (aiUsage / papers.length * 100).round();
 
-                  return Wrap(
-                    spacing: 16,
-                    runSpacing: 16,
-                    children: [
-                      _AdminStatCard(
-                        icon: Icons.library_books_outlined,
-                        title: 'Active submissions',
-                        value: '$activeSubmissions',
-                        detail: 'Awaiting reviewer decisions',
-                      ),
-                      _AdminStatCard(
-                        icon: Icons.person_search_outlined,
-                        title: 'Reviewers pending approval',
-                        value: '${pendingReviewers.length}',
-                        detail: 'Applications awaiting admin action',
-                      ),
-                      _AdminStatCard(
-                        icon: Icons.auto_awesome_outlined,
-                        title: 'AI review usage',
-                        value: '$aiPercentage%',
-                        detail: settings.aiPreReviewEnabled
-                            ? 'Gemini pre-screening enabled'
-                            : 'AI pre-review disabled',
-                      ),
-                    ],
-                  );
-                },
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, _) => Text('Unable to load settings: $error'),
-              ),
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Text('Unable to load reviewers: $error'),
+      return SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        child: Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          children: [
+            _AdminStatCard(
+              icon: Icons.library_books_outlined,
+              title: 'Active submissions',
+              value: '$activeSubmissions',
+              detail: 'Awaiting reviewer decisions',
             ),
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, _) => Text('Unable to load submissions: $error'),
-          ),
-        ],
-      ),
-    );
+            _AdminStatCard(
+              icon: Icons.person_search_outlined,
+              title: 'Reviewers pending approval',
+              value: '${pendingReviewers.length}',
+              detail: 'Applications awaiting admin action',
+            ),
+            _AdminStatCard(
+              icon: Icons.auto_awesome_outlined,
+              title: 'AI review usage',
+              value: '$aiPercentage%',
+              detail: settings.aiPreReviewEnabled
+                  ? 'Gemini pre-screening enabled'
+                  : 'AI pre-review disabled',
+            ),
+          ],
+        ),
+      );
+    });
   }
 }
 
-class AdminDepartmentsPage extends ConsumerWidget {
+class AdminDepartmentsPage extends StatelessWidget {
   const AdminDepartmentsPage({super.key});
 
+  DepartmentController get _departmentController => Get.find<DepartmentController>();
+  AdminController get _adminController => Get.find<AdminController>();
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final departmentsAsync = ref.watch(departmentsProvider);
-    final controller = ref.watch(adminControllerProvider);
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final departments = _departmentController.departments;
+      return SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Manage departments', style: Theme.of(context).textTheme.headlineMedium),
+                ElevatedButton.icon(
+                  onPressed: () => _showAddDepartmentDialog(context),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add department'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (departments.isEmpty)
+              const Text('No departments found.')
+            else
+              Column(
+                children: departments
+                    .map(
+                      (department) => _DepartmentCard(
+                        department: department,
+                        onToggle: (value) => _adminController.toggleDepartment(
+                          departmentId: department.id,
+                          isActive: value,
+                        ),
+                        onRemoveSubject: (subject) =>
+                            _adminController.removeSubject(department: department, subject: subject),
+                        onAddSubject: (name) =>
+                            _adminController.addSubject(departmentId: department.id, subjectName: name),
+                      ),
+                    )
+                    .toList(),
+              ),
+          ],
+        ),
+      );
+    });
+  }
+
+  Future<void> _showAddDepartmentDialog(BuildContext context) async {
     final nameController = TextEditingController();
     final subjectController = TextEditingController();
     final subjects = <String>[];
 
-    Future<void> showAddDialog() async {
-      await showDialog(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: const Text('Add department'),
-            content: StatefulBuilder(
-              builder: (context, setState) {
-                return SizedBox(
-                  width: 360,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(
-                        controller: nameController,
-                        decoration: const InputDecoration(labelText: 'Department name'),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: subjectController,
-                        decoration: InputDecoration(
-                          labelText: 'Subject',
-                          suffixIcon: IconButton(
-                            icon: const Icon(Icons.add),
-                            onPressed: () {
-                              final value = subjectController.text.trim();
-                              if (value.isEmpty) return;
-                              setState(() {
-                                subjects.add(value);
-                              });
-                              subjectController.clear();
-                            },
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        children: subjects
-                            .map(
-                              (subject) => Chip(
-                                label: Text(subject),
-                                onDeleted: () => setState(() => subjects.remove(subject)),
-                              ),
-                            )
-                            .toList(),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  if (nameController.text.trim().isEmpty) return;
-                  await controller.addDepartment(
-                    name: nameController.text.trim(),
-                    subjects: subjects,
-                  );
-                  if (context.mounted) Navigator.of(context).pop();
-                },
-                child: const Text('Add'),
-              ),
-            ],
-          );
-        },
-      );
-    }
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Manage departments', style: Theme.of(context).textTheme.headlineMedium),
-              ElevatedButton.icon(
-                onPressed: showAddDialog,
-                icon: const Icon(Icons.add),
-                label: const Text('Add department'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          departmentsAsync.when(
-            data: (departments) => Column(
-              children: departments
-                  .map(
-                    (department) => _DepartmentCard(
-                      department: department,
-                    ),
-                  )
-                  .toList(),
-            ),
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, _) => Text('Unable to load departments: $error'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class AdminUsersPage extends ConsumerWidget {
-  const AdminUsersPage({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final usersAsync = ref.watch(allUsersProvider);
-    final controller = ref.watch(adminControllerProvider);
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      child: usersAsync.when(
-        data: (users) => Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: users.map((user) {
-            return _UserRow(
-              user: user,
-              onApprove: (approved) =>
-                  controller.approveReviewer(reviewerId: user.id, approved: approved),
-              onBlock: (block) => controller.blockUser(userId: user.id, block: block),
-            );
-          }).toList(),
-        ),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Text('Unable to load users: $error'),
-      ),
-    );
-  }
-}
-
-class AdminPapersPage extends ConsumerStatefulWidget {
-  const AdminPapersPage({super.key});
-
-  @override
-  ConsumerState<AdminPapersPage> createState() => _AdminPapersPageState();
-}
-
-class _AdminPapersPageState extends ConsumerState<AdminPapersPage> {
-  final _reassignController = TextEditingController();
-
-  @override
-  Widget build(BuildContext context) {
-    final papersAsync = ref.watch(allPapersProvider);
-    final adminController = ref.watch(adminControllerProvider);
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      child: papersAsync.when(
-        data: (papers) => Column(
-          children: papers.map((paper) {
-            return Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-              margin: const EdgeInsets.only(bottom: 16),
-              child: Padding(
-                padding: const EdgeInsets.all(18),
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Add department'),
+          content: StatefulBuilder(
+            builder: (context, setState) {
+              return SizedBox(
+                width: 360,
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(paper.title, style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Owner: ${paper.ownerId} • Status: ${paper.status.label}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.gray500,
-                          ),
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(labelText: 'Department name'),
                     ),
                     const SizedBox(height: 12),
                     TextField(
-                      controller: _reassignController,
+                      controller: subjectController,
                       decoration: InputDecoration(
-                        labelText: 'Assign reviewer by ID',
+                        labelText: 'Subject',
                         suffixIcon: IconButton(
-                          icon: const Icon(Icons.swap_horiz),
-                          onPressed: () async {
-                            final reviewerId = _reassignController.text.trim();
-                            if (reviewerId.isEmpty) return;
-                            await adminController.reassignReviewer(
-                              paperId: paper.id,
-                              reviewerId: reviewerId,
-                            );
-                            if (mounted) {
-                              _reassignController.clear();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Reassigned to $reviewerId')),
-                              );
-                            }
+                          onPressed: () {
+                            final text = subjectController.text.trim();
+                            if (text.isEmpty) return;
+                            setState(() {
+                              subjects.add(text);
+                            });
+                            subjectController.clear();
                           },
+                          icon: const Icon(Icons.add),
                         ),
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: subjects
+                          .map(
+                            (subject) => Chip(
+                              label: Text(subject),
+                              onDeleted: () => setState(() => subjects.remove(subject)),
+                            ),
+                          )
+                          .toList(),
+                    ),
                   ],
                 ),
-              ),
-            );
-          }).toList(),
-        ),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Text('Unable to load papers: $error'),
-      ),
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (nameController.text.trim().isEmpty) return;
+                await _adminController.addDepartment(
+                  name: nameController.text.trim(),
+                  subjects: subjects,
+                );
+                if (context.mounted) Navigator.of(context).pop();
+              },
+              child: const Text('Add'),
+            ),
+          ],
+        );
+      },
     );
   }
 }
 
-class AdminSettingsPage extends ConsumerWidget {
-  const AdminSettingsPage({super.key});
+class AdminUsersPage extends StatelessWidget {
+  const AdminUsersPage({super.key});
+
+  AdminController get _adminController => Get.find<AdminController>();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final settingsAsync = ref.watch(appSettingsProvider);
-    final controller = ref.watch(adminControllerProvider);
-
-    return settingsAsync.when(
-      data: (settings) => Padding(
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final users = _adminController.allUsers;
+      if (users.isEmpty) {
+        return const Center(child: Text('No users found.'));
+      }
+      return ListView.builder(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('System settings', style: Theme.of(context).textTheme.headlineMedium),
-            const SizedBox(height: 16),
-            SwitchListTile.adaptive(
-              value: settings.aiPreReviewEnabled,
-              onChanged: (value) => controller.updateSettings(
-                settings.copyWith(aiPreReviewEnabled: value),
+        itemCount: users.length,
+        itemBuilder: (context, index) {
+          final user = users[index];
+          return _UserRow(
+            user: user,
+            onApprove: (approved) =>
+                _adminController.approveReviewer(reviewerId: user.id, approved: approved),
+            onBlock: (block) => _adminController.blockUser(userId: user.id, block: block),
+          );
+        },
+      );
+    });
+  }
+}
+
+class AdminPapersPage extends StatelessWidget {
+  const AdminPapersPage({super.key});
+
+  AdminController get _adminController => Get.find<AdminController>();
+  SubmissionController get _submissionController => Get.find<SubmissionController>();
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final papers = _submissionController.studentPapers;
+      final reviewerController = TextEditingController();
+      return ListView.builder(
+        padding: const EdgeInsets.all(24),
+        itemCount: papers.length,
+        itemBuilder: (context, index) {
+          final paper = papers[index];
+          return Card(
+            margin: const EdgeInsets.only(bottom: 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(paper.title, style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Owner: ${paper.ownerId} • Status: ${paper.status.label}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.gray500,
+                        ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: reviewerController,
+                    decoration: InputDecoration(
+                      labelText: 'Assign reviewer by ID',
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.swap_horiz),
+                        onPressed: () async {
+                          final reviewerId = reviewerController.text.trim();
+                          if (reviewerId.isEmpty) return;
+                          await _adminController.reassignReviewer(
+                            paperId: paper.id,
+                            reviewerId: reviewerId,
+                          );
+                          reviewerController.clear();
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Reassigned to $reviewerId')),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              title: const Text('Enable AI pre-review'),
-              subtitle: const Text('Route submissions to Gemini before human reviewers.'),
             ),
-            SwitchListTile.adaptive(
-              value: settings.allowStudentRegistration,
-              onChanged: (value) => controller.updateSettings(
-                settings.copyWith(allowStudentRegistration: value),
-              ),
-              title: const Text('Allow student registration'),
-            ),
-            SwitchListTile.adaptive(
-              value: settings.allowReviewerRegistration,
-              onChanged: (value) => controller.updateSettings(
-                settings.copyWith(allowReviewerRegistration: value),
-              ),
-              title: const Text('Allow reviewer applications'),
-            ),
-            SwitchListTile.adaptive(
-              value: settings.allowPublicVisibility,
-              onChanged: (value) => controller.updateSettings(
-                settings.copyWith(allowPublicVisibility: value),
-              ),
-              title: const Text('Allow public visibility'),
-            ),
-          ],
-        ),
-      ),
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => Text('Unable to load settings: $error'),
-    );
+          );
+        },
+      );
+    });
+  }
+}
+
+class AdminSettingsPage extends StatelessWidget {
+  const AdminSettingsPage({super.key});
+
+  SettingsController get _settingsController => Get.find<SettingsController>();
+  AdminController get _adminController => Get.find<AdminController>();
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final settings = _settingsController.settings.value;
+      return ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          Text('System settings', style: Theme.of(context).textTheme.headlineMedium),
+          const SizedBox(height: 16),
+          SwitchListTile.adaptive(
+            value: settings.aiPreReviewEnabled,
+            onChanged: (value) =>
+                _adminController.updateSettings(settings.copyWith(aiPreReviewEnabled: value)),
+            title: const Text('Enable AI pre-review'),
+            subtitle: const Text('Route submissions to Gemini before human reviewers.'),
+          ),
+          SwitchListTile.adaptive(
+            value: settings.allowStudentRegistration,
+            onChanged: (value) =>
+                _adminController.updateSettings(settings.copyWith(allowStudentRegistration: value)),
+            title: const Text('Allow student registration'),
+          ),
+          SwitchListTile.adaptive(
+            value: settings.allowReviewerRegistration,
+            onChanged: (value) =>
+                _adminController.updateSettings(settings.copyWith(allowReviewerRegistration: value)),
+            title: const Text('Allow reviewer applications'),
+          ),
+          SwitchListTile.adaptive(
+            value: settings.allowPublicVisibility,
+            onChanged: (value) =>
+                _adminController.updateSettings(settings.copyWith(allowPublicVisibility: value)),
+            title: const Text('Allow public visibility'),
+          ),
+        ],
+      );
+    });
   }
 }
 
@@ -413,14 +382,21 @@ class _AdminStatCard extends StatelessWidget {
   }
 }
 
-class _DepartmentCard extends ConsumerWidget {
-  const _DepartmentCard({required this.department});
+class _DepartmentCard extends StatelessWidget {
+  const _DepartmentCard({
+    required this.department,
+    required this.onToggle,
+    required this.onRemoveSubject,
+    required this.onAddSubject,
+  });
 
   final Department department;
+  final ValueChanged<bool> onToggle;
+  final ValueChanged<Subject> onRemoveSubject;
+  final ValueChanged<String> onAddSubject;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final controller = ref.watch(adminControllerProvider);
+  Widget build(BuildContext context) {
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: Padding(
@@ -434,10 +410,7 @@ class _DepartmentCard extends ConsumerWidget {
                 Text(department.name, style: Theme.of(context).textTheme.titleMedium),
                 Switch(
                   value: department.isActive,
-                  onChanged: (value) => controller.toggleDepartment(
-                    departmentId: department.id,
-                    isActive: value,
-                  ),
+                  onChanged: onToggle,
                 ),
               ],
             ),
@@ -448,10 +421,7 @@ class _DepartmentCard extends ConsumerWidget {
                   .map(
                     (subject) => Chip(
                       label: Text(subject.name),
-                      onDeleted: () => controller.removeSubject(
-                        department: department,
-                        subject: subject,
-                      ),
+                      onDeleted: () => onRemoveSubject(subject),
                     ),
                   )
                   .toList(),
@@ -459,7 +429,7 @@ class _DepartmentCard extends ConsumerWidget {
             const SizedBox(height: 12),
             TextButton.icon(
               onPressed: () async {
-                final subjectName = await showDialog<String>(
+                final name = await showDialog<String>(
                   context: context,
                   builder: (context) {
                     final controller = TextEditingController();
@@ -475,18 +445,16 @@ class _DepartmentCard extends ConsumerWidget {
                           child: const Text('Cancel'),
                         ),
                         ElevatedButton(
-                          onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+                          onPressed: () =>
+                              Navigator.of(context).pop(controller.text.trim()),
                           child: const Text('Add'),
                         ),
                       ],
                     );
                   },
                 );
-                if (subjectName != null && subjectName.isNotEmpty) {
-                  ref.read(adminControllerProvider).addSubject(
-                        departmentId: department.id,
-                        subjectName: subjectName,
-                      );
+                if (name != null && name.isNotEmpty) {
+                  onAddSubject(name);
                 }
               },
               icon: const Icon(Icons.add),

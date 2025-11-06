@@ -1,87 +1,85 @@
 import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:get/get.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../data/models/research_paper.dart';
-import '../../../submissions/providers/submission_providers.dart';
+import '../../../submissions/controllers/submission_controller.dart';
 
-class StudentAchievementsPage extends ConsumerStatefulWidget {
+class StudentAchievementsPage extends StatefulWidget {
   const StudentAchievementsPage({super.key});
 
   @override
-  ConsumerState<StudentAchievementsPage> createState() => _StudentAchievementsPageState();
+  State<StudentAchievementsPage> createState() => _StudentAchievementsPageState();
 }
 
-class _StudentAchievementsPageState extends ConsumerState<StudentAchievementsPage> {
-  late ConfettiController _controller;
+class _StudentAchievementsPageState extends State<StudentAchievementsPage> {
+  late ConfettiController _confettiController;
+
+  final SubmissionController _submissionController = Get.find<SubmissionController>();
 
   @override
   void initState() {
     super.initState();
-    _controller = ConfettiController(duration: const Duration(seconds: 2));
-    _controller.play();
+    _confettiController = ConfettiController(duration: const Duration(seconds: 2));
+    _confettiController.play();
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _confettiController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final papersAsync = ref.watch(studentPapersProvider);
-    return Stack(
-      children: [
-        Align(
-          alignment: Alignment.topCenter,
-          child: ConfettiWidget(
-            confettiController: _controller,
-            blastDirectionality: BlastDirectionality.explosive,
-            shouldLoop: false,
+    return Obx(() {
+      final achievements = _buildAchievements(_submissionController.studentPapers);
+
+      return Stack(
+        children: [
+          Align(
+            alignment: Alignment.topCenter,
+            child: ConfettiWidget(
+              confettiController: _confettiController,
+              blastDirectionality: BlastDirectionality.explosive,
+              shouldLoop: false,
+            ),
           ),
-        ),
-        SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Achievements', style: Theme.of(context).textTheme.headlineMedium),
-              const SizedBox(height: 8),
-              Text(
-                'Celebrate milestones in your research journey. Achievements unlock automatically as you submit and publish.',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppColors.gray600),
-              ),
-              const SizedBox(height: 24),
-              papersAsync.when(
-                data: (papers) {
-                  final achievements = _deriveAchievements(papers);
-                  return Wrap(
-                    spacing: 16,
-                    runSpacing: 16,
-                    children: achievements
-                        .map(
-                          (achievement) => _AchievementCard(
-                            title: achievement.title,
-                            description: achievement.description,
-                            earned: achievement.earned,
-                          ),
-                        )
-                        .toList(),
-                  );
-                },
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, _) => Text('Failed to load achievements: $error'),
-              ),
-            ],
+          SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Achievements', style: Theme.of(context).textTheme.headlineMedium),
+                const SizedBox(height: 8),
+                Text(
+                  'Celebrate milestones in your research journey.',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppColors.gray600),
+                ),
+                const SizedBox(height: 24),
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 16,
+                  children: achievements
+                      .map(
+                        (achievement) => _AchievementCard(
+                          title: achievement.title,
+                          description: achievement.description,
+                          earned: achievement.earned,
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
-    );
+        ],
+      );
+    });
   }
 
-  List<_Achievement> _deriveAchievements(List<ResearchPaper> papers) {
+  List<_Achievement> _buildAchievements(List<ResearchPaper> papers) {
     final publishedCount = papers.where((paper) => paper.isPublished).length;
     final aiReviewed = papers.where((paper) => paper.aiReview != null).length;
     final revisionsHandled =
@@ -141,7 +139,7 @@ class _AchievementCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: earned ? AppColors.indigo600 : AppColors.gray200),
-        color: earned ? AppColors.indigo600.withOpacity(0.08) : Colors.white,
+        color: earned ? AppColors.indigo600.withValues(alpha: 0.08) : Colors.white,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -169,7 +167,7 @@ class _AchievementCard extends StatelessWidget {
           const SizedBox(height: 12),
           Chip(
             label: Text(earned ? 'Achieved' : 'In progress'),
-            backgroundColor: earned ? AppColors.success.withOpacity(0.2) : AppColors.gray100,
+            backgroundColor: earned ? AppColors.success.withValues(alpha: 0.2) : AppColors.gray100,
             labelStyle: TextStyle(
               color: earned ? AppColors.success : AppColors.gray500,
               fontWeight: FontWeight.w600,

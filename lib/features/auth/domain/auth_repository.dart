@@ -1,23 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../../../core/services/firebase_providers.dart';
+import '../../../core/services/firebase_service.dart';
 import '../../../data/models/app_user.dart';
 import '../domain/auth_role.dart';
 
-final authRepositoryProvider = Provider<AuthRepository>((ref) {
-  final auth = ref.watch(firebaseAuthProvider);
-  final firestore = ref.watch(firestoreProvider);
-  return AuthRepository(auth: auth, firestore: firestore);
-});
-
 class AuthRepository {
   AuthRepository({
-    required FirebaseAuth auth,
-    required FirebaseFirestore firestore,
-  })  : _auth = auth,
-        _firestore = firestore;
+    FirebaseAuth? auth,
+    FirebaseFirestore? firestore,
+  })  : _auth = auth ?? FirebaseService.auth,
+        _firestore = firestore ?? FirebaseService.firestore;
 
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
@@ -96,6 +88,7 @@ class AuthRepository {
       createdAt: DateTime.now(),
     );
 
+
     await _firestore.collection('users').doc(profile.id).set({
       'email': profile.email,
       'displayName': profile.displayName,
@@ -109,7 +102,7 @@ class AuthRepository {
       'isReviewerApproved': profile.isReviewerApproved,
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    });
 
     return profile;
   }

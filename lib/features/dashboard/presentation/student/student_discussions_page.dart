@@ -1,53 +1,72 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:get/get.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../data/models/discussion.dart';
-import '../../../discussions/providers/discussion_providers.dart';
-import '../../../common/providers/user_directory_provider.dart';
+import '../../../auth/controllers/auth_controller.dart';
+import '../../../common/controllers/user_directory_controller.dart';
+import '../../../discussions/controllers/discussion_controller.dart';
 
-class StudentDiscussionsPage extends ConsumerWidget {
+class StudentDiscussionsPage extends StatelessWidget {
   const StudentDiscussionsPage({super.key});
 
+  DiscussionController get _controller => Get.find<DiscussionController>();
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final threadsAsync = ref.watch(discussionThreadsProvider);
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showCreateThreadDialog(context, ref),
+        onPressed: () => _showCreateThreadDialog(context),
         icon: const Icon(Icons.add_comment_outlined),
         label: const Text('Start discussion'),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Open discussions', style: Theme.of(context).textTheme.headlineMedium),
-            const SizedBox(height: 8),
-            Text(
-              'Collaborate publicly with the Kohinchha community. Discussions are visible to all roles.',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppColors.gray600),
-            ),
-            const SizedBox(height: 24),
-            threadsAsync.when(
-              data: (threads) => Column(
-                children: threads.map((thread) => _ThreadCard(thread: thread)).toList(),
+      body: Obx(() {
+        final threads = _controller.threads;
+        return SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Open discussions', style: Theme.of(context).textTheme.headlineMedium),
+              const SizedBox(height: 8),
+              Text(
+                'Collaborate publicly with the Kohinchha community. Discussions are visible to all roles.',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppColors.gray600),
               ),
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Text(
-                'Failed to load discussions: $error',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.error),
-              ),
-            ),
-          ],
-        ),
-      ),
+              const SizedBox(height: 24),
+              if (threads.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: AppColors.gray200),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.forum_outlined, color: AppColors.gray500),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'No discussions yet. Start the first thread!',
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Column(
+                  children: threads.map((thread) => _ThreadCard(thread: thread)).toList(),
+                ),
+            ],
+          ),
+        );
+      }),
     );
   }
 
-  Future<void> _showCreateThreadDialog(BuildContext context, WidgetRef ref) async {
+  Future<void> _showCreateThreadDialog(BuildContext context) async {
     final titleController = TextEditingController();
     final descriptionController = TextEditingController();
     final tagsController = TextEditingController();
@@ -87,7 +106,9 @@ class StudentDiscussionsPage extends ConsumerWidget {
                           onPressed: () {
                             final tag = tagsController.text.trim();
                             if (tag.isEmpty) return;
-                            setState(() => tags.add(tag));
+                            setState(() {
+                              tags.add(tag);
+                            });
                             tagsController.clear();
                           },
                           icon: const Icon(Icons.add),
@@ -100,7 +121,7 @@ class StudentDiscussionsPage extends ConsumerWidget {
                       children: tags
                           .map(
                             (tag) => Chip(
-                              label: Text(tag),
+                              label: Text('#$tag'),
                               onDeleted: () => setState(() => tags.remove(tag)),
                             ),
                           )
@@ -122,11 +143,11 @@ class StudentDiscussionsPage extends ConsumerWidget {
                     descriptionController.text.trim().isEmpty) {
                   return;
                 }
-                await ref.read(discussionControllerProvider).createThread(
-                      title: titleController.text.trim(),
-                      description: descriptionController.text.trim(),
-                      tags: tags,
-                    );
+                await _controller.createThread(
+                  title: titleController.text.trim(),
+                  description: descriptionController.text.trim(),
+                  tags: tags,
+                );
                 if (context.mounted) Navigator.of(context).pop();
               },
               child: const Text('Create'),
@@ -138,99 +159,101 @@ class StudentDiscussionsPage extends ConsumerWidget {
   }
 }
 
-class _ThreadCard extends ConsumerWidget {
+class _ThreadCard extends StatelessWidget {
   const _ThreadCard({required this.thread});
 
   final DiscussionThread thread;
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final userDirectory = ref.watch(userDirectoryProvider).maybeWhen(
-          data: (users) => users,
-          orElse: () => const [],
-        );
-    final authorName = userDirectory.firstWhere(
-      (user) => user.id == thread.createdBy,
-      orElse: () => userDirectory.isNotEmpty ? userDirectory.first : null,
-    );
+  DiscussionController get _controller => Get.find<DiscussionController>();
+  AuthController get _authController => Get.find<AuthController>();
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.gray200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.forum_outlined, color: AppColors.indigo600),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  thread.title,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ),
-              TextButton(
-                onPressed: () => _openThread(context, ref, thread),
-                child: const Text('View thread'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            thread.description,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: thread.tags
-                .map(
-                  (tag) => Chip(
-                    label: Text('#$tag'),
-                    backgroundColor: AppColors.pearl50,
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final userDirectory = Get.find<UserDirectoryController>().users;
+      final author = userDirectory.firstWhereOrNull((user) => user.id == thread.createdBy);
+
+      return Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.gray200),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.forum_outlined, color: AppColors.indigo600),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    thread.title,
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
-                )
-                .toList(),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 16,
-                backgroundColor: AppColors.indigo600,
-                child: Text(
-                  authorName?.displayName.substring(0, 1).toUpperCase() ?? 'A',
-                  style: const TextStyle(color: Colors.white),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                authorName?.displayName ?? 'Anonymous',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.gray600),
-              ),
-              const Spacer(),
-              const Icon(Icons.people_outline, size: 18, color: AppColors.gray500),
-              const SizedBox(width: 4),
-              Text(
-                '${thread.participantCount} participants',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.gray500),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
+                TextButton(
+                  onPressed: () => _openThread(context),
+                  child: const Text('View thread'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              thread.description,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: thread.tags
+                  .map(
+                    (tag) => Chip(
+                      label: Text('#$tag'),
+                      backgroundColor: AppColors.pearl50,
+                    ),
+                  )
+                  .toList(),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: AppColors.indigo600,
+                  child: Text(
+                    (author?.displayName.substring(0, 1) ?? 'A').toUpperCase(),
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  author?.displayName ?? 'Anonymous',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.gray600),
+                ),
+                const Spacer(),
+                const Icon(Icons.people_outline, size: 18, color: AppColors.gray500),
+                const SizedBox(width: 4),
+                Text(
+                  '${thread.participantCount} participants',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.gray500),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    });
   }
 
-  Future<void> _openThread(BuildContext context, WidgetRef ref, DiscussionThread thread) async {
+  Future<void> _openThread(BuildContext context) async {
     final commentController = TextEditingController();
+    final commentsStream = _controller.commentsStream(thread.id);
+    final user = _authController.currentUser.value;
+
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -239,7 +262,6 @@ class _ThreadCard extends ConsumerWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
-        final commentsProvider = discussionCommentsProvider(thread.id);
         return Padding(
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(context).viewInsets.bottom,
@@ -265,47 +287,46 @@ class _ThreadCard extends ConsumerWidget {
               Text(thread.title, style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 8),
               Expanded(
-                child: Consumer(
-                  builder: (context, ref, _) {
-                    final commentsAsync = ref.watch(commentsProvider);
-                    return commentsAsync.when(
-                      data: (comments) => ListView.builder(
-                        itemCount: comments.length,
-                        itemBuilder: (context, index) {
-                          final comment = comments[index];
-                          return ListTile(
-                            leading: const Icon(Icons.person_outline),
-                            title: Text(comment.content),
-                            subtitle: Text(
-                              '${comment.upvotes.length} upvotes',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(color: AppColors.gray500),
+                child: StreamBuilder<List<DiscussionComment>>(
+                  stream: commentsStream,
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    final comments = snapshot.data!;
+                    if (comments.isEmpty) {
+                      return const Center(child: Text('No comments yet.'));
+                    }
+                    return ListView.builder(
+                      itemCount: comments.length,
+                      itemBuilder: (context, index) {
+                        final comment = comments[index];
+                        final liked = user != null && comment.upvotes.contains(user.id);
+                        return ListTile(
+                          leading: const Icon(Icons.person_outline),
+                          title: Text(comment.content),
+                          subtitle: Text(
+                            '${comment.upvotes.length} upvotes',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(color: AppColors.gray500),
+                          ),
+                          trailing: IconButton(
+                            icon: Icon(
+                              Icons.thumb_up_outlined,
+                              color: liked ? AppColors.indigo600 : AppColors.gray400,
                             ),
-                            trailing: IconButton(
-                              icon: Icon(
-                                Icons.thumb_up_outlined,
-                                color: comment.upvotes.contains('me')
-                                    ? AppColors.indigo600
-                                    : AppColors.gray400,
-                              ),
-                              onPressed: () => ref
-                                  .read(discussionControllerProvider)
-                                  .toggleUpvote(
-                                    threadId: thread.id,
-                                    commentId: comment.id,
-                                    upvote: !comment.upvotes.contains('me'),
-                                  ),
-                            ),
-                          );
-                        },
-                      ),
-                      loading: () => const Center(child: CircularProgressIndicator()),
-                      error: (error, _) => Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Text('Error loading comments: $error'),
-                      ),
+                            onPressed: user == null
+                                ? null
+                                : () => _controller.toggleUpvote(
+                                      threadId: thread.id,
+                                      commentId: comment.id,
+                                      upvote: !liked,
+                                    ),
+                          ),
+                        );
+                      },
                     );
                   },
                 ),
@@ -322,10 +343,7 @@ class _ThreadCard extends ConsumerWidget {
                     onPressed: () async {
                       final text = commentController.text.trim();
                       if (text.isEmpty) return;
-                      await ref.read(discussionControllerProvider).addComment(
-                            threadId: thread.id,
-                            content: text,
-                          );
+                      await _controller.addComment(threadId: thread.id, content: text);
                       commentController.clear();
                     },
                   ),

@@ -1,61 +1,47 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
+import 'package:get/get.dart';
 
+import '../../../../app/router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../data/models/app_settings.dart';
 import '../../../../data/models/research_paper.dart';
-import '../../../admin/providers/admin_settings_provider.dart';
-import '../../../submissions/providers/submission_providers.dart';
+import '../../../admin/controllers/settings_controller.dart';
+import '../../../submissions/controllers/submission_controller.dart';
 
-class StudentHomePage extends ConsumerWidget {
+class StudentHomePage extends StatelessWidget {
   const StudentHomePage({super.key});
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final papersAsync = ref.watch(studentPapersProvider);
-    final settingsAsync = ref.watch(appSettingsProvider);
+  SubmissionController get _submissionController => Get.find<SubmissionController>();
+  SettingsController get _settingsController => Get.find<SettingsController>();
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Welcome back', style: Theme.of(context).textTheme.headlineMedium),
-          const SizedBox(height: 8),
-          Text(
-            'Manage your research submissions, track reviewer feedback, and stay in sync with the community.',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppColors.gray600),
-          ),
-          const SizedBox(height: 24),
-          papersAsync.when(
-            data: (papers) => _MetricsRow(papers: papers),
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, _) => Text(
-              'Unable to load statistics: $error',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.error),
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final papers = _submissionController.studentPapers;
+      final settings = _settingsController.settings.value;
+      return SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Welcome back', style: Theme.of(context).textTheme.headlineMedium),
+            const SizedBox(height: 8),
+            Text(
+              'Manage your research submissions, track reviewer feedback, and stay in sync with the community.',
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppColors.gray600),
             ),
-          ),
-          const SizedBox(height: 24),
-          settingsAsync.when(
-            data: (settings) => _SettingsBanner(settings: settings),
-            loading: () => const SizedBox.shrink(),
-            error: (_, __) => const SizedBox.shrink(),
-          ),
-          const SizedBox(height: 28),
-          Text('Recent activity', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 12),
-          papersAsync.when(
-            data: (papers) => _RecentActivityList(papers: papers),
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, _) => Text(
-              'Unable to load activity: $error',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.error),
-            ),
-          ),
-        ],
-      ),
-    );
+            const SizedBox(height: 24),
+            _MetricsRow(papers: papers),
+            const SizedBox(height: 24),
+            _SettingsBanner(settings: settings),
+            const SizedBox(height: 28),
+            Text('Recent activity', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 12),
+            _RecentActivityList(papers: papers),
+          ],
+        ),
+      );
+    });
   }
 }
 
@@ -73,36 +59,37 @@ class _MetricsRow extends StatelessWidget {
     final aiReviewed = papers.where((paper) => paper.aiReview != null).length;
 
     final cards = [
-      _StatCard(
+      const _StatCard(
         title: 'Active submissions',
-        value: '$active',
-        description: 'Awaiting review or decision',
         icon: Icons.pending_actions_outlined,
+        description: 'Awaiting review or decision',
       ),
-      _StatCard(
+      const _StatCard(
         title: 'Published papers',
-        value: '$published',
-        description: 'Visible to peers based on privacy',
         icon: Icons.workspace_premium_outlined,
+        description: 'Visible to peers based on privacy',
       ),
-      _StatCard(
+      const _StatCard(
         title: 'Revisions requested',
-        value: '$revisions',
-        description: 'Requires updates before approval',
         icon: Icons.refresh_outlined,
+        description: 'Requires updates before approval',
       ),
-      _StatCard(
+      const _StatCard(
         title: 'AI reviewed',
-        value: '$aiReviewed',
-        description: 'Received Gemini pre-review insights',
         icon: Icons.auto_awesome_outlined,
+        description: 'Received Gemini pre-review insights',
       ),
     ];
+
+    final values = ['$active', '$published', '$revisions', '$aiReviewed'];
 
     return Wrap(
       spacing: 16,
       runSpacing: 16,
-      children: cards,
+      children: List.generate(
+        cards.length,
+        (index) => cards[index].copyWith(value: values[index]),
+      ),
     );
   }
 }
@@ -110,15 +97,22 @@ class _MetricsRow extends StatelessWidget {
 class _StatCard extends StatelessWidget {
   const _StatCard({
     required this.title,
-    required this.value,
     required this.description,
     required this.icon,
+    this.value,
   });
 
   final String title;
-  final String value;
   final String description;
   final IconData icon;
+  final String? value;
+
+  _StatCard copyWith({String? value}) => _StatCard(
+        title: title,
+        description: description,
+        icon: icon,
+        value: value ?? this.value,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -143,7 +137,7 @@ class _StatCard extends StatelessWidget {
           Icon(icon, color: AppColors.indigo600),
           const SizedBox(height: 12),
           Text(
-            value,
+            value ?? '0',
             style: Theme.of(context)
                 .textTheme
                 .headlineSmall
@@ -232,7 +226,8 @@ class _RecentActivityList extends StatelessWidget {
       );
     }
 
-    final sorted = [...papers]..sort(
+    final sorted = [...papers]
+      ..sort(
         (a, b) => (b.updatedAt ?? b.submittedAt ?? DateTime(0))
             .compareTo(a.updatedAt ?? a.submittedAt ?? DateTime(0)),
       );
@@ -253,9 +248,8 @@ class _ActivityTile extends StatelessWidget {
     final statusColor = _statusColor(paper.status);
     final statusText = paper.status.label;
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: () => context.go('/student/paper/${paper.id}'),
+    return GestureDetector(
+      onTap: () => Get.toNamed('${AppRoutes.paperDetail}/${paper.id}'),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(18),
@@ -269,36 +263,36 @@ class _ActivityTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: statusColor.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(16),
+                color: statusColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(_statusIcon(paper.status), color: statusColor),
             ),
-            child: Icon(_statusIcon(paper.status), color: statusColor),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(paper.title, style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 4),
-                Text(
-                  'Department ${paper.departmentId} • Subject ${paper.subjectId}',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: AppColors.gray500),
-                ),
-              ],
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(paper.title, style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Department ${paper.departmentId} • Subject ${paper.subjectId}',
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: AppColors.gray500),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Chip(
-            label: Text(statusText),
-            backgroundColor: statusColor.withOpacity(0.14),
-            labelStyle: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: statusColor, fontWeight: FontWeight.w600),
+            const SizedBox(width: 12),
+            Chip(
+              label: Text(statusText),
+              backgroundColor: statusColor.withValues(alpha: 0.14),
+              labelStyle: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: statusColor, fontWeight: FontWeight.w600),
             ),
           ],
         ),

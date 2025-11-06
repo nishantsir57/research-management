@@ -1,23 +1,25 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:get/get.dart';
 
 import '../../../../core/constants/app_colors.dart';
-import '../../../auth/providers/auth_controller.dart';
+import '../../../auth/controllers/auth_controller.dart';
 
-class ReviewerSettingsPage extends ConsumerStatefulWidget {
+class ReviewerSettingsPage extends StatefulWidget {
   const ReviewerSettingsPage({super.key});
 
   @override
-  ConsumerState<ReviewerSettingsPage> createState() => _ReviewerSettingsPageState();
+  State<ReviewerSettingsPage> createState() => _ReviewerSettingsPageState();
 }
 
-class _ReviewerSettingsPageState extends ConsumerState<ReviewerSettingsPage> {
+class _ReviewerSettingsPageState extends State<ReviewerSettingsPage> {
   bool _availableForReviews = true;
   bool _newsletter = false;
 
+  final AuthController _authController = Get.find<AuthController>();
+
   @override
   Widget build(BuildContext context) {
-    final user = ref.watch(currentAppUserProvider);
+    final user = _authController.currentUser.value;
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       child: Column(

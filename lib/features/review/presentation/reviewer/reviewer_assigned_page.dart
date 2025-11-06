@@ -1,150 +1,114 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:get/get.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../data/models/research_paper.dart';
-import '../../../auth/providers/auth_controller.dart';
-import '../../../submissions/domain/submission_repository.dart';
-import '../../../submissions/providers/submission_providers.dart';
+import '../../../auth/controllers/auth_controller.dart';
+import '../../../common/controllers/loading_controller.dart';
+import '../../../submissions/controllers/submission_controller.dart';
 
-class ReviewerAssignedPapersPage extends ConsumerWidget {
+class ReviewerAssignedPapersPage extends StatelessWidget {
   const ReviewerAssignedPapersPage({super.key});
 
+  SubmissionController get _submissionController => Get.find<SubmissionController>();
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final assignmentsAsync = ref.watch(reviewerAssignmentsProvider);
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      child: assignmentsAsync.when(
-        data: (papers) => Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Assigned submissions', style: Theme.of(context).textTheme.headlineMedium),
-            const SizedBox(height: 8),
-            Text(
-              'Review manuscripts assigned to you. Provide structured feedback, highlights, and decisions.',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppColors.gray600),
-            ),
-            const SizedBox(height: 24),
-            if (papers.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppColors.gray200),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.inbox_outlined, color: AppColors.gray500),
-                    const SizedBox(width: 12),
-                    Text(
-                      'No assignments awaiting your review.',
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  ],
-                ),
-              )
-            else
-              Column(
-                children: papers
-                    .map((paper) => _AssignmentCard(
-                          paper: paper,
-                        ))
-                    .toList(),
-              ),
-          ],
-        ),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Text('Unable to load assignments: $error'),
-      ),
-    );
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final assignments = _submissionController.reviewerAssignments;
+      if (assignments.isEmpty) {
+        return const Center(child: Text('No assignments awaiting your review.'));
+      }
+      return ListView.builder(
+        padding: const EdgeInsets.all(24),
+        itemCount: assignments.length,
+        itemBuilder: (context, index) {
+          final paper = assignments[index];
+          return _AssignmentCard(paper: paper);
+        },
+      );
+    });
   }
 }
 
-class _AssignmentCard extends ConsumerWidget {
+class _AssignmentCard extends StatelessWidget {
   const _AssignmentCard({required this.paper});
 
   final ResearchPaper paper;
 
+  SubmissionController get _submissionController => Get.find<SubmissionController>();
+  AuthController get _authController => Get.find<AuthController>();
+  LoadingController get _loadingController => Get.find<LoadingController>();
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Container(
+  Widget build(BuildContext context) {
+    return Card(
       margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.gray200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.description_outlined, color: AppColors.indigo600),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  paper.title,
-                  style: Theme.of(context).textTheme.titleLarge,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.description_outlined, color: AppColors.indigo600),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(paper.title, style: Theme.of(context).textTheme.titleLarge),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () => _openReviewSheet(context),
+                  icon: const Icon(Icons.rate_review_outlined),
+                  label: const Text('Review'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              paper.abstractText,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
+            ),
+            if (paper.aiReview != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  color: AppColors.pearl50,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Gemini pre-review summary',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      paper.aiReview!.summary,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: AppColors.gray600, height: 1.5),
+                    ),
+                  ],
                 ),
               ),
-              ElevatedButton.icon(
-                onPressed: () => _openReviewSheet(context, ref, paper),
-                icon: const Icon(Icons.rate_review_outlined),
-                label: const Text('Review'),
-              ),
             ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            paper.abstractText,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
-          ),
-          if (paper.aiReview != null) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.lilac200),
-                color: AppColors.pearl50,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Gemini pre-review summary',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    paper.aiReview!.summary,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: AppColors.gray600, height: 1.5),
-                  ),
-                ],
-              ),
-            ),
           ],
-        ],
+        ),
       ),
     );
   }
 
-  static Future<void> _openReviewSheet(
-    BuildContext context,
-    WidgetRef ref,
-    ResearchPaper paper,
-  ) async {
+  Future<void> _openReviewSheet(BuildContext context) async {
     final summaryController = TextEditingController();
     final improvementController = TextEditingController();
     final highlightExcerptController = TextEditingController();
@@ -186,7 +150,7 @@ class _AssignmentCard extends ConsumerWidget {
               }
               final highlight = HighlightAnnotation(
                 id: UniqueKey().toString(),
-                reviewerId: '',
+                reviewerId: _authController.currentUser.value!.id,
                 startOffset: start,
                 endOffset: start + excerpt.length,
                 colorHex: '#${highlightColor.value.toRadixString(16).substring(2)}',
@@ -230,19 +194,14 @@ class _AssignmentCard extends ConsumerWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'Abstract',
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
+                            Text('Abstract', style: Theme.of(context).textTheme.titleMedium),
                             const SizedBox(height: 8),
                             Text(
                               paper.abstractText,
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    height: 1.6,
-                                  ),
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
                             ),
-                            const SizedBox(height: 16),
-                            if (paper.content != null)
+                            if (paper.content != null) ...[
+                              const SizedBox(height: 16),
                               ExpansionTile(
                                 title: const Text('Full text'),
                                 children: [
@@ -255,6 +214,7 @@ class _AssignmentCard extends ConsumerWidget {
                                   ),
                                 ],
                               ),
+                            ],
                             const SizedBox(height: 16),
                             TextField(
                               controller: summaryController,
@@ -284,8 +244,7 @@ class _AssignmentCard extends ConsumerWidget {
                                     (item) => Chip(
                                       label: Text(item),
                                       deleteIcon: const Icon(Icons.close),
-                                      onDeleted: () =>
-                                          setState(() => improvementList.remove(item)),
+                                      onDeleted: () => setState(() => improvementList.remove(item)),
                                     ),
                                   )
                                   .toList(),
@@ -358,7 +317,14 @@ class _AssignmentCard extends ConsumerWidget {
                                         ),
                                       ),
                                       label: Text(
-                                        '${paper.content?.substring(highlight.startOffset, min(highlight.endOffset, paper.content!.length)) ?? paper.abstractText.substring(highlight.startOffset, min(highlight.endOffset, paper.abstractText.length))}',
+                                        paper.content?.substring(
+                                              highlight.startOffset,
+                                              min(highlight.endOffset, paper.content!.length),
+                                            ) ??
+                                            paper.abstractText.substring(
+                                              highlight.startOffset,
+                                              min(highlight.endOffset, paper.abstractText.length),
+                                            ),
                                       ),
                                       onDeleted: () => setState(() => highlights.remove(highlight)),
                                     ),
@@ -389,15 +355,13 @@ class _AssignmentCard extends ConsumerWidget {
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         onPressed: () async {
-                          final repository = ref.read(submissionRepositoryProvider);
-                          await repository.recordReviewDecision(
-                            paper: paper,
-                            reviewerId: ref.read(currentAppUserProvider)!.id,
-                            decision: decision,
-                            summary: summaryController.text.trim(),
-                            improvementPoints: improvementList,
-                            highlights: highlights,
-                          );
+                          await _loadingController.during(() => _submissionController.recordReviewDecision(
+                                paper: paper,
+                                decision: decision,
+                                summary: summaryController.text.trim(),
+                                improvementPoints: improvementList,
+                                highlights: highlights,
+                              ));
                           if (context.mounted) Navigator.of(context).pop();
                         },
                         icon: const Icon(Icons.check_circle_outline),

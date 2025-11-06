@@ -1,13 +1,11 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../../core/services/firebase_providers.dart';
+import '../../../core/services/firebase_service.dart';
 import '../../../core/services/gemini_service.dart';
 import '../../../core/utils/converters.dart';
 import '../../../data/models/app_settings.dart';
@@ -15,27 +13,15 @@ import '../../../data/models/app_user.dart';
 import '../../../data/models/paper_comment.dart';
 import '../../../data/models/research_paper.dart';
 import '../../auth/domain/auth_role.dart';
-import '../../auth/providers/auth_controller.dart';
-
-final submissionRepositoryProvider = Provider<SubmissionRepository>((ref) {
-  final firestore = ref.watch(firestoreProvider);
-  final storage = ref.watch(firebaseStorageProvider);
-  final gemini = ref.watch(geminiServiceProvider);
-  return SubmissionRepository(
-    firestore: firestore,
-    storage: storage,
-    geminiService: gemini,
-  );
-});
 
 class SubmissionRepository {
   SubmissionRepository({
-    required FirebaseFirestore firestore,
-    required FirebaseStorage storage,
-    required GeminiService geminiService,
-  })  : _firestore = firestore,
-        _storage = storage,
-        _geminiService = geminiService;
+    FirebaseFirestore? firestore,
+    FirebaseStorage? storage,
+    GeminiService? geminiService,
+  })  : _firestore = firestore ?? FirebaseService.firestore,
+        _storage = storage ?? FirebaseService.storage,
+        _geminiService = geminiService ?? GeminiService();
 
   final FirebaseFirestore _firestore;
   final FirebaseStorage _storage;
@@ -354,10 +340,6 @@ class SubmissionRepository {
       'reviewerIds': FieldValue.arrayUnion([reviewerId]),
       'updatedAt': FieldValue.serverTimestamp(),
     });
-  }
-
-  ReviewDecision _mapDecision(String value) {
-    return ReviewDecision.values.firstWhere((element) => element.name == value);
   }
 
   PaperStatus _nextStatusFromDecision(ReviewDecision decision) {

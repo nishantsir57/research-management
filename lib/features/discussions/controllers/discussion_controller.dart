@@ -1,29 +1,30 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:async';
+
+import 'package:get/get.dart';
 
 import '../../../data/models/discussion.dart';
-import '../../auth/providers/auth_controller.dart';
+import '../../auth/controllers/auth_controller.dart';
 import '../domain/discussion_repository.dart';
 
-final discussionThreadsProvider = StreamProvider<List<DiscussionThread>>((ref) {
-  final repository = ref.watch(discussionRepositoryProvider);
-  return repository.watchThreads();
-});
+class DiscussionController extends GetxController {
+  DiscussionController({DiscussionRepository? repository})
+      : _repository = repository ?? DiscussionRepository();
 
-final discussionCommentsProvider =
-    StreamProvider.family<List<DiscussionComment>, String>((ref, threadId) {
-  final repository = ref.watch(discussionRepositoryProvider);
-  return repository.watchThreadComments(threadId);
-});
+  final DiscussionRepository _repository;
+  final AuthController _authController = Get.find<AuthController>();
 
-final discussionControllerProvider =
-    Provider<DiscussionController>((ref) => DiscussionController(ref: ref));
+  final RxList<DiscussionThread> threads = <DiscussionThread>[].obs;
 
-class DiscussionController {
-  DiscussionController({required this.ref});
+  StreamSubscription<List<DiscussionThread>>? _threadSubscription;
 
-  final Ref ref;
+  @override
+  void onInit() {
+    super.onInit();
+    _threadSubscription = _repository.watchThreads().listen(threads.assignAll);
+  }
 
-  DiscussionRepository get _repository => ref.read(discussionRepositoryProvider);
+  Stream<List<DiscussionComment>> commentsStream(String threadId) =>
+      _repository.watchThreadComments(threadId);
 
   Future<void> createThread({
     required String title,
@@ -32,7 +33,7 @@ class DiscussionController {
     String? departmentId,
     String? subjectId,
   }) async {
-    final user = ref.read(currentAppUserProvider);
+    final user = _authController.currentUser.value;
     if (user == null) throw StateError('Not authenticated');
     await _repository.createThread(
       creatorId: user.id,
@@ -48,7 +49,7 @@ class DiscussionController {
     required String threadId,
     required String content,
   }) async {
-    final user = ref.read(currentAppUserProvider);
+    final user = _authController.currentUser.value;
     if (user == null) throw StateError('Not authenticated');
     await _repository.addComment(
       threadId: threadId,
@@ -62,7 +63,7 @@ class DiscussionController {
     required String commentId,
     required bool upvote,
   }) async {
-    final user = ref.read(currentAppUserProvider);
+    final user = _authController.currentUser.value;
     if (user == null) throw StateError('Not authenticated');
     await _repository.toggleUpvote(
       threadId: threadId,
@@ -70,5 +71,11 @@ class DiscussionController {
       userId: user.id,
       upvote: upvote,
     );
+  }
+
+  @override
+  void onClose() {
+    _threadSubscription?.cancel();
+    super.onClose();
   }
 }

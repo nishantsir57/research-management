@@ -32,7 +32,7 @@ class OnboardingPage extends StatelessWidget {
                     constraints: const BoxConstraints(maxWidth: 1040),
                     child: Card(
                       elevation: 0,
-                      color: Colors.white.withOpacity(0.95),
+                      color: Colors.white.withValues(alpha: 0.95),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(32),
                       ),
@@ -192,49 +192,6 @@ class OnboardingPage extends StatelessWidget {
   }
 }
 
-class _FeatureList extends StatelessWidget {
-  const _FeatureList({required this.isMobile});
-
-  final bool isMobile;
-
-  @override
-  Widget build(BuildContext context) {
-    final items = [
-      ('Students', 'Submit, track, and collaborate on research with peers.'),
-      ('Reviewers', 'AI-assisted review tools with highlights and annotations.'),
-      ('Admins', 'Manage departments, reviewers, and institutional settings.'),
-    ];
-    return Wrap(
-      spacing: 24,
-      runSpacing: 24,
-      children: items
-          .map(
-            (item) => SizedBox(
-              width: isMobile ? double.infinity : 240,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.$1,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    item.$2,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.copyWith(color: AppColors.gray600, height: 1.5),
-                  ),
-                ],
-              ),
-            ),
-          )
-          .toList(),
-    );
-  }
-}
-
 class _StatsCard extends StatelessWidget {
   const _StatsCard({required this.title, required this.subtitle});
 
@@ -292,7 +249,7 @@ class _Pill extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.pearl50,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.indigo600.withOpacity(0.18)),
+        border: Border.all(color: AppColors.indigo600.withValues(alpha: 0.18)),
       ),
       child: Text(
         text,

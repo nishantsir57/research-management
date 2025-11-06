@@ -1,48 +1,37 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:get/get.dart';
 
-import '../../features/common/providers/loading_provider.dart';
+import '../../features/common/controllers/loading_controller.dart';
 import '../constants/app_colors.dart';
 
-class AppLoadingOverlay extends ConsumerWidget {
+class AppLoadingOverlay extends StatelessWidget {
   const AppLoadingOverlay({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isLoading = ref.watch(globalLoadingProvider);
-    if (!isLoading) return const SizedBox.shrink();
-
-    return IgnorePointer(
-      ignoring: false,
-      child: AnimatedOpacity(
-        opacity: isLoading ? 1 : 0,
-        duration: const Duration(milliseconds: 200),
-        child: Container(
-          color: Colors.black.withOpacity(0.2),
-          alignment: Alignment.center,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              SizedBox(
-                width: 64,
-                height: 64,
-                child: CircularProgressIndicator(
-                  strokeWidth: 6,
-                  valueColor: AlwaysStoppedAnimation(AppColors.violet500),
-                ),
+  Widget build(BuildContext context) {
+    final controller = Get.find<LoadingController>();
+    return Obx(() {
+      final isLoading = controller.isLoading.value;
+      if (!isLoading) return const SizedBox.shrink();
+      return IgnorePointer(
+        ignoring: false,
+        child: AnimatedOpacity(
+          opacity: isLoading ? 1 : 0,
+          duration: const Duration(milliseconds: 200),
+          child: Container(
+            color: Colors.black.withValues(alpha: 0.2),
+            alignment: Alignment.center,
+            child: const SizedBox(
+              width: 64,
+              height: 64,
+              child: CircularProgressIndicator(
+                strokeWidth: 6,
+                valueColor: AlwaysStoppedAnimation(AppColors.violet500),
               ),
-              SizedBox(height: 16),
-              // Text(
-              //   'Processing...',
-              //   style: TextStyle(
-              //     fontWeight: FontWeight.w600,
-              //     color: Colors.white,
-              //   ),
-              // ),
-            ],
+            ),
           ),
         ),
-      ),
-    );
+      );
+    });
   }
 }

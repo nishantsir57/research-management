@@ -76,17 +76,18 @@ class AppTheme {
       ),
     );
 
+    final colorScheme = ColorScheme.fromSeed(
+      seedColor: AppColors.indigo700,
+      primary: AppColors.indigo700,
+      secondary: AppColors.violet500,
+      surface: Colors.white,
+      error: AppColors.error,
+    );
+
     return base.copyWith(
       scaffoldBackgroundColor: AppColors.pearlWhite,
       textTheme: textTheme,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: AppColors.indigo700,
-        primary: AppColors.indigo700,
-        secondary: AppColors.violet500,
-        background: AppColors.pearlWhite,
-        surface: Colors.white,
-        error: AppColors.error,
-      ),
+      colorScheme: colorScheme,
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.white,
         elevation: 0,

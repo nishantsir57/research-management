@@ -1,18 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../../core/services/firebase_providers.dart';
+import '../../../core/services/firebase_service.dart';
 import '../../../data/models/connection.dart';
 
-final connectionRepositoryProvider = Provider<ConnectionRepository>((ref) {
-  final firestore = ref.watch(firestoreProvider);
-  return ConnectionRepository(firestore: firestore);
-});
-
 class ConnectionRepository {
-  ConnectionRepository({required FirebaseFirestore firestore})
-      : _firestore = firestore,
+  ConnectionRepository({FirebaseFirestore? firestore})
+      : _firestore = firestore ?? FirebaseService.firestore,
         _uuid = const Uuid();
 
   final FirebaseFirestore _firestore;

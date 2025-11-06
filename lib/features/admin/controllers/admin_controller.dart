@@ -1,36 +1,69 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:async';
 
-import '../../../core/services/firebase_providers.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:get/get.dart';
+
+import '../../../core/services/firebase_service.dart';
 import '../../../data/models/app_settings.dart';
+import '../../../data/models/app_user.dart';
 import '../../../data/models/department.dart';
 import '../../../data/models/research_paper.dart';
 import '../../auth/domain/auth_role.dart';
 import '../../submissions/domain/submission_repository.dart';
-import 'admin_settings_provider.dart';
-import 'department_providers.dart';
 
-final adminControllerProvider = Provider<AdminController>((ref) {
-  final firestore = ref.watch(firestoreProvider);
-  final submissionRepository = ref.watch(submissionRepositoryProvider);
-  return AdminController(
-    firestore: firestore,
-    submissionRepository: submissionRepository,
-  );
-});
-
-class AdminController {
+class AdminController extends GetxController {
   AdminController({
-    required FirebaseFirestore firestore,
-    required SubmissionRepository submissionRepository,
-  })  : _firestore = firestore,
-        _submissionRepository = submissionRepository;
+    SubmissionRepository? submissionRepository,
+    FirebaseFirestore? firestore,
+  })  : _firestore = firestore ?? FirebaseService.firestore,
+        _submissionRepository = submissionRepository ?? SubmissionRepository();
 
   final FirebaseFirestore _firestore;
   final SubmissionRepository _submissionRepository;
 
+  final RxList<AppUser> allUsers = <AppUser>[].obs;
+  final RxList<AppUser> pendingReviewers = <AppUser>[].obs;
+  final RxList<ResearchPaper> allPapers = <ResearchPaper>[].obs;
+
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _userSubscription;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _paperSubscription;
+
   CollectionReference<Map<String, dynamic>> get _departments =>
       _firestore.collection('departments');
+
+  @override
+  void onInit() {
+    super.onInit();
+    _userSubscription = _firestore.collection('users').snapshots().listen((snapshot) {
+      final users = snapshot.docs.map((doc) {
+        final data = doc.data();
+        return AppUser.fromJson({
+          ...data,
+          'id': doc.id,
+          'role': data['role'],
+        });
+      }).toList();
+      allUsers.assignAll(users);
+      pendingReviewers.assignAll(
+        users.where((user) => user.role == AuthRole.reviewer && !user.isReviewerApproved),
+      );
+    });
+
+    _paperSubscription = FirebaseService.firestore
+        .collection('papers')
+        .orderBy('submittedAt', descending: true)
+        .snapshots()
+        .listen((snapshot) {
+      final papers = snapshot.docs.map((doc) {
+        final data = doc.data();
+        return ResearchPaper.fromJson({
+          ...data,
+          'id': doc.id,
+        });
+      }).toList();
+      allPapers.assignAll(papers);
+    });
+  }
 
   Future<void> addDepartment({
     required String name,
@@ -127,5 +160,12 @@ class AdminController {
       'allowPublicVisibility': settings.allowPublicVisibility,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+  }
+
+  @override
+  void onClose() {
+    _userSubscription?.cancel();
+    _paperSubscription?.cancel();
+    super.onClose();
   }
 }

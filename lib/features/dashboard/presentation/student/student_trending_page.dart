@@ -1,20 +1,23 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
+import 'package:get/get.dart';
 
+import '../../../../app/router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../data/models/research_paper.dart';
-import '../../../admin/providers/department_providers.dart';
-import '../../../submissions/providers/submission_providers.dart';
+import '../../../admin/controllers/department_controller.dart';
+import '../../../submissions/controllers/submission_controller.dart';
 
-class StudentTrendingPage extends ConsumerStatefulWidget {
+class StudentTrendingPage extends StatefulWidget {
   const StudentTrendingPage({super.key});
 
   @override
-  ConsumerState<StudentTrendingPage> createState() => _StudentTrendingPageState();
+  State<StudentTrendingPage> createState() => _StudentTrendingPageState();
 }
 
-class _StudentTrendingPageState extends ConsumerState<StudentTrendingPage> {
+class _StudentTrendingPageState extends State<StudentTrendingPage> {
+  final SubmissionController _submissionController = Get.find<SubmissionController>();
+  final DepartmentController _departmentController = Get.find<DepartmentController>();
+
   String? _departmentFilter;
   String? _subjectFilter;
   PaperVisibility? _visibilityFilter = PaperVisibility.public;
@@ -22,29 +25,34 @@ class _StudentTrendingPageState extends ConsumerState<StudentTrendingPage> {
 
   @override
   Widget build(BuildContext context) {
-    final departmentsAsync = ref.watch(departmentsProvider);
-    final filter = PublishedPaperFilter(
-      departmentId: _departmentFilter,
-      subjectId: _subjectFilter,
-      visibility: _visibilityFilter,
-      afterDate: _afterDateFilter,
-    );
-    final papersAsync = ref.watch(publishedPapersProvider(filter));
+    return Obx(() {
+      final departments = _departmentController.departments;
+      final papers = _submissionController.publishedPapers;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Trending research', style: Theme.of(context).textTheme.headlineMedium),
-          const SizedBox(height: 8),
-          Text(
-            'Discover research shared publicly or with your connections. Use filters to narrow topics.',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppColors.gray600),
-          ),
-          const SizedBox(height: 20),
-          departmentsAsync.when(
-            data: (departments) => Wrap(
+      final filtered = papers.where((paper) {
+        final departmentMatches =
+            _departmentFilter == null || paper.departmentId == _departmentFilter;
+        final subjectMatches = _subjectFilter == null || paper.subjectId == _subjectFilter;
+        final visibilityMatches =
+            _visibilityFilter == null || paper.visibility == _visibilityFilter;
+        final dateMatches =
+            _afterDateFilter == null || (paper.publishedAt ?? DateTime(0)).isAfter(_afterDateFilter!);
+        return departmentMatches && subjectMatches && visibilityMatches && dateMatches;
+      }).toList();
+
+      return SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Trending research', style: Theme.of(context).textTheme.headlineMedium),
+            const SizedBox(height: 8),
+            Text(
+              'Discover research shared publicly or with your connections. Use filters to narrow topics.',
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppColors.gray600),
+            ),
+            const SizedBox(height: 20),
+            Wrap(
               spacing: 16,
               runSpacing: 16,
               children: [
@@ -143,23 +151,35 @@ class _StudentTrendingPageState extends ConsumerState<StudentTrendingPage> {
                 ),
               ],
             ),
-            loading: () => const LinearProgressIndicator(),
-            error: (error, _) => Text('Failed to load departments: $error'),
-          ),
-          const SizedBox(height: 24),
-          papersAsync.when(
-            data: (papers) => Column(
-              children: papers.map((paper) => _TrendingCard(paper: paper)).toList(),
-            ),
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, _) => Text(
-              'Failed to load papers: $error',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.error),
-            ),
-          ),
-        ],
-      ),
-    );
+            const SizedBox(height: 24),
+            if (filtered.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppColors.gray200),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.inbox_outlined, color: AppColors.gray500),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'No papers match the selected filters.',
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Column(
+                children: filtered.map((paper) => _TrendingCard(paper: paper)).toList(),
+              ),
+          ],
+        ),
+      );
+    });
   }
 }
 
@@ -170,9 +190,8 @@ class _TrendingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: () => context.go('/student/paper/${paper.id}'),
+    return GestureDetector(
+      onTap: () => Get.toNamed('${AppRoutes.paperDetail}/${paper.id}'),
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         padding: const EdgeInsets.all(20),

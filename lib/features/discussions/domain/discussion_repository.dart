@@ -1,18 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../../core/services/firebase_providers.dart';
+import '../../../core/services/firebase_service.dart';
 import '../../../data/models/discussion.dart';
 
-final discussionRepositoryProvider = Provider<DiscussionRepository>((ref) {
-  final firestore = ref.watch(firestoreProvider);
-  return DiscussionRepository(firestore: firestore);
-});
-
 class DiscussionRepository {
-  DiscussionRepository({required FirebaseFirestore firestore})
-      : _firestore = firestore,
+  DiscussionRepository({FirebaseFirestore? firestore})
+      : _firestore = firestore ?? FirebaseService.firestore,
         _uuid = const Uuid();
 
   final FirebaseFirestore _firestore;

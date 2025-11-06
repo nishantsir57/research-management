@@ -1,26 +1,39 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:get/get.dart';
+import 'package:responsive_framework/responsive_framework.dart';
 
+import '../core/bindings/app_bindings.dart';
 import '../core/widgets/app_loading_overlay.dart';
 import 'router.dart';
 import 'theme.dart';
 
-class KohinchhaApp extends ConsumerWidget {
+class KohinchhaApp extends StatelessWidget {
   const KohinchhaApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final router = ref.watch(routerProvider);
-    return MaterialApp.router(
+  Widget build(BuildContext context) {
+    return GetMaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Kohinchha',
       theme: AppTheme.light(),
-      routerConfig: router,
+      initialRoute: AppRoutes.onboarding,
+      getPages: AppPages.pages,
+      initialBinding: AppBindings(),
       builder: (context, child) {
-        // Ensure overlay (loading indicator, etc.) has Directionality and Theme from
-        // MaterialApp by placing it inside the builder.
+        final responsiveChild = ResponsiveBreakpoints.builder(
+          child: child ?? const SizedBox.shrink(),
+          breakpoints: const [
+            Breakpoint(start: 0, end: 480, name: MOBILE),
+            Breakpoint(start: 481, end: 800, name: TABLET),
+            Breakpoint(start: 801, end: 1200, name: DESKTOP),
+            Breakpoint(start: 1201, end: double.infinity, name: '4K'),
+          ],
+        );
         return Stack(
-          children: [child ?? const SizedBox.shrink(), const AppLoadingOverlay()],
+          children: [
+            responsiveChild,
+            const AppLoadingOverlay(),
+          ],
         );
       },
     );

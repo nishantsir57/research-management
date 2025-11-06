@@ -1,17 +1,11 @@
 import 'dart:convert';
 
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 
 import '../../data/models/research_paper.dart';
 
-final geminiServiceProvider = Provider<GeminiService>((ref) {
-  final apiKey = const String.fromEnvironment('GEMINI_API_KEY');
-  return GeminiService(apiKey: apiKey);
-});
-
 class GeminiService {
-  GeminiService({required this.apiKey});
+  GeminiService({String? apiKey}) : apiKey = apiKey ?? const String.fromEnvironment('GEMINI_API_KEY');
 
   final String apiKey;
   static const String _defaultModel = 'gemini-1.5-flash';

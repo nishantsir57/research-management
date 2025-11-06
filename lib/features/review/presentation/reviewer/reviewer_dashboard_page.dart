@@ -1,82 +1,56 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:get/get.dart';
 import '../../../../core/constants/app_colors.dart';
-import '../../../submissions/providers/submission_providers.dart';
+import '../../../submissions/controllers/submission_controller.dart';
 
-class ReviewerDashboardPage extends ConsumerWidget {
+class ReviewerDashboardPage extends StatelessWidget {
   const ReviewerDashboardPage({super.key});
 
+  SubmissionController get _submissionController => Get.find<SubmissionController>();
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final assignmentsAsync = ref.watch(reviewerAssignmentsProvider);
-    final historyAsync = ref.watch(reviewerHistoryProvider);
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final assignments = _submissionController.reviewerAssignments;
+      final history = _submissionController.reviewerHistory;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Reviewer dashboard', style: Theme.of(context).textTheme.headlineMedium),
-          const SizedBox(height: 8),
-          Text(
-            'Stay on top of pending reviews, leverage AI suggestions, and track your impact.',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppColors.gray600),
-          ),
-          const SizedBox(height: 24),
-          assignmentsAsync.when(
-            data: (assignments) => historyAsync.when(
-              data: (history) {
-                final pending = assignments.length;
-                final aiPending = assignments.where((paper) => paper.aiReview != null).length;
-                final avgTurnaround = history.isEmpty
-                    ? 0.0
-                    : history
-                            .map((paper) => paper.reviews
-                                .where((review) => review.reviewerId == review.reviewerId)
-                                .length)
-                            .fold<double>(0.0, (prev, value) => prev + value) /
-                        history.length;
+      final pending = assignments.length;
+      final aiPending = assignments.where((paper) => paper.aiReview != null).length;
+      final completed = history.length;
 
-                return Wrap(
-                  spacing: 16,
-                  runSpacing: 16,
-                  children: [
-                    _StatCard(
-                      icon: Icons.pending_actions_outlined,
-                      title: 'Pending reviews',
-                      value: '$pending',
-                      detail: 'Awaiting your decision',
-                    ),
-                    _StatCard(
-                      icon: Icons.auto_fix_high_outlined,
-                      title: 'AI insights ready',
-                      value: '$aiPending',
-                      detail: 'Pre-review summaries available',
-                    ),
-                    _StatCard(
-                      icon: Icons.history_outlined,
-                      title: 'Reviews completed',
-                      value: '${history.length}',
-                      detail: 'Average comments ${avgTurnaround.toStringAsFixed(1)}',
-                    ),
-                  ],
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Text('Unable to load history: $error'),
+      return SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        child: Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          children: [
+            _SummaryCard(
+              icon: Icons.pending_actions_outlined,
+              title: 'Pending Reviews',
+              value: '$pending',
+              detail: 'Awaiting your decision',
             ),
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, _) => Text('Unable to load assignments: $error'),
-          ),
-        ],
-      ),
-    );
+            _SummaryCard(
+              icon: Icons.auto_fix_high_outlined,
+              title: 'AI Suggestions',
+              value: '$aiPending',
+              detail: 'Pre-review summaries available',
+            ),
+            _SummaryCard(
+              icon: Icons.history_outlined,
+              title: 'Reviews Completed',
+              value: '$completed',
+              detail: 'Historical decisions and feedback',
+            ),
+          ],
+        ),
+      );
+    });
   }
 }
 
-class _StatCard extends StatelessWidget {
-  const _StatCard({
+class _SummaryCard extends StatelessWidget {
+  const _SummaryCard({
     required this.icon,
     required this.title,
     required this.value,
@@ -92,30 +66,46 @@ class _StatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 240,
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
         color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.gray200),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Icon(icon, color: AppColors.indigo600),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: Theme.of(context)
-                .textTheme
-                .headlineSmall
-                ?.copyWith(color: AppColors.indigo700, fontSize: 28),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.pearl50,
+            ),
+            child: Icon(icon, color: AppColors.indigo600),
           ),
-          const SizedBox(height: 6),
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 6),
-          Text(
-            detail,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.gray500),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 6),
+                Text(
+                  value,
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(color: AppColors.indigo700),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  detail,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: AppColors.gray500),
+                ),
+              ],
+            ),
           ),
         ],
       ),
